@@ -1,0 +1,19 @@
+{
+  "name": "genie-rss-backend",
+  "version": "1.0.0",
+  "description": "RSS Feed Retrieval and Generation API",
+  "main": "src/index.js",
+  "type": "module",
+  "scripts": {
+    "start": "node src/index.js",
+    "dev": "node --watch src/index.js"
+  },
+  "dependencies": {
+    "axios": "^1.6.0",
+    "cheerio": "^1.0.0-rc.12",
+    "cors": "^2.8.5",
+    "express": "^4.18.2",
+    "feed": "^4.2.2",
+    "rss-parser": "^3.13.0"
+  }
+}
