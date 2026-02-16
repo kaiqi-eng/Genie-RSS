@@ -8,13 +8,13 @@ import { Feed } from 'feed';
  */
 export function generateRssFeed(siteUrl, scrapedData) {
   const feed = new Feed({
-    title: scrapedData.title || 'Generated Feed',
-    description: scrapedData.description || `Auto-generated RSS feed for ${siteUrl}`,
-    id: siteUrl,
-    link: siteUrl,
+    title: String(scrapedData.title || 'Generated Feed'),
+    description: String(scrapedData.description || `Auto-generated RSS feed for ${siteUrl}`),
+    id: String(siteUrl),
+    link: String(siteUrl),
     language: 'en',
-    image: scrapedData.favicon,
-    favicon: scrapedData.favicon,
+    image: scrapedData.favicon ? String(scrapedData.favicon) : undefined,
+    favicon: scrapedData.favicon ? String(scrapedData.favicon) : undefined,
     copyright: `Content from ${scrapedData.siteName || new URL(siteUrl).hostname}`,
     updated: new Date(),
     generator: 'Genie-RSS Feed Generator',
@@ -26,11 +26,11 @@ export function generateRssFeed(siteUrl, scrapedData) {
   // Add items to the feed
   for (const item of scrapedData.items) {
     feed.addItem({
-      title: item.title,
-      id: item.link,
-      link: item.link,
-      description: item.content || item.title,
-      content: item.content || '',
+      title: String(item.title || 'Untitled'),
+      id: String(item.link || item.url || ''),
+      link: String(item.link || item.url || ''),
+      description: String(item.content || item.title || ''),
+      content: String(item.content || ''),
       date: item.pubDate ? new Date(item.pubDate) : new Date(),
       image: item.thumbnail
     });
