@@ -29,19 +29,19 @@ if (!SCRAPINGBEE_API_KEY) {
 export const hashId = (...parts) =>
   crypto.createHash("md5").update(parts.join("")).digest("hex");
 
-export const sendToWebhook = async (payload) => {
-  if (!WEBHOOK_URL) return { status: "disabled" };
+// export const sendToWebhook = async (payload) => {
+//   if (!WEBHOOK_URL) return { status: "disabled" };
 
-  try {
-    const response = await axios.post(WEBHOOK_URL, payload, {
-      headers: { "Content-Type": "application/json" },
-      timeout: 20000,
-    });
-    return { status: "delivered", code: response.status };
-  } catch (err) {
-    return { status: "failed", error: err.message };
-  }
-};
+//   try {
+//     const response = await axios.post(WEBHOOK_URL, payload, {
+//       headers: { "Content-Type": "application/json" },
+//       timeout: 20000,
+//     });
+//     return { status: "delivered", code: response.status };
+//   } catch (err) {
+//     return { status: "failed", error: err.message };
+//   }
+// };
 
 // ---------------- RSS PARSER ----------------
 

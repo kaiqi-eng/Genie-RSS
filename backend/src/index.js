@@ -3,6 +3,9 @@ import cors from 'cors';
 import rssRoutes from './routes/rss.js';
 import thirdEyeRoutes from './routes/feed.js';
 import summarizeRoutes from "./routes/summarize.js";
+import transcriptRoutes from "./routes/transcripts.js";
+import intelRoutes from './routes/intel.js';
+
 
 const app = express();
 const PORT = process.env.PORT || 3001;
@@ -20,6 +23,12 @@ app.use('/api/rss/feed', thirdEyeRoutes);
 
 // Route for summarization(new code)
 app.use("/api/summarize", summarizeRoutes);
+
+// Route for Transcript summarization(new code)
+app.use("/api/transcript", transcriptRoutes);
+
+// After your other routes
+app.use('/api/intel', intelRoutes);
 
 
 // Health check
