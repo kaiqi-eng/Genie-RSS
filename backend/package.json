@@ -9,11 +9,20 @@
     "dev": "node --watch src/index.js"
   },
   "dependencies": {
-    "axios": "^1.6.0",
-    "cheerio": "^1.0.0-rc.12",
-    "cors": "^2.8.5",
-    "express": "^4.18.2",
-    "feed": "^4.2.2",
-    "rss-parser": "^3.13.0"
-  }
+      "axios": "^1.6.0",
+      "cheerio": "^1.0.0-rc.12",
+      "cors": "^2.8.5",
+      "express": "^4.18.2",
+      "feed": "^4.2.2",
+      "rss-parser": "^3.13.0",
+      "@langchain/openai": "^1.0.0",
+      "@langchain/core": "^1.0.0",
+      "dotenv": "^16.0.0",
+      "xml2js": "^0.4.23",
+      "imap-simple": "^5.0.0"
+   },
+  "devDependencies": {},
+  "keywords": [],
+  "author": "",
+  "license": "ISC"
 }
