@@ -3,6 +3,7 @@ import { discoverRssFeed } from '../services/rssDiscovery.js';
 import { fetchAndParseRss } from '../services/rssFetcher.js';
 import { scrapeWebsite } from '../utils/scraper.js';
 import { generateRssFeed } from '../services/rssGenerator.js';
+import { validateUrl, UrlValidationError } from '../utils/urlValidator.js';
 
 const router = express.Router();
 
@@ -14,10 +15,13 @@ router.post('/fetch', async (req, res) => {
       return res.status(400).json({ error: 'URL is required' });
     }
 
-    // Validate URL
+    // Validate URL with SSRF protection
     try {
-      new URL(url);
-    } catch {
+      validateUrl(url);
+    } catch (e) {
+      if (e instanceof UrlValidationError) {
+        return res.status(400).json({ error: e.message, code: e.code });
+      }
       return res.status(400).json({ error: 'Invalid URL format' });
     }
 

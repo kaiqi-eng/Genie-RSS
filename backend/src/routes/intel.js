@@ -1,5 +1,6 @@
 import express from 'express';
 import axios from 'axios';
+import { validateUrls } from '../utils/urlValidator.js';
 
 const router = express.Router();
 
@@ -17,11 +18,23 @@ router.post('/addintelurl', async (req, res) => {
             });
         }
 
+        // Validate all URLs for SSRF protection
+        const { valid: validUrls, invalid: invalidUrls } = validateUrls(urls);
+
         const results = [];
 
-        // Send one by one (strictly sequential)
-        for (let i = 0; i < urls.length; i++) {
-            const url = urls[i];
+        // Add invalid URLs to results with error
+        for (const { url, error } of invalidUrls) {
+            results.push({
+                url,
+                success: false,
+                error: `URL validation failed: ${error}`
+            });
+        }
+
+        // Send one by one (strictly sequential) - only valid URLs
+        for (let i = 0; i < validUrls.length; i++) {
+            const url = validUrls[i];
 
             try {
                 const response = await axios.post(
@@ -71,11 +84,23 @@ router.post('/deleteintelurl', async (req, res) => {
             });
         }
 
+        // Validate all URLs for SSRF protection
+        const { valid: validUrls, invalid: invalidUrls } = validateUrls(urls);
+
         const results = [];
 
-        // Process one by one (sequential)
-        for (let i = 0; i < urls.length; i++) {
-            const url = urls[i];
+        // Add invalid URLs to results with error
+        for (const { url, error } of invalidUrls) {
+            results.push({
+                url,
+                success: false,
+                error: `URL validation failed: ${error}`
+            });
+        }
+
+        // Process one by one (sequential) - only valid URLs
+        for (let i = 0; i < validUrls.length; i++) {
+            const url = validUrls[i];
 
             try {
                 const response = await axios.post(

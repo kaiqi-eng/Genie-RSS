@@ -12,6 +12,7 @@ import crypto from "crypto";
 import zlib from "zlib";
 import imaps from "imap-simple";
 import * as cheerio from "cheerio";
+import { validateUrl, isValidUrl } from "../utils/urlValidator.js";
 
 // ---------------- CONFIG ----------------
 
@@ -101,7 +102,10 @@ const discoverFeedUrls = (html, baseUrl) => {
         href = new URL(href, baseUrl).href;
       }
 
-      feeds.add(href);
+      // Validate discovered feed URLs for SSRF protection
+      if (isValidUrl(href)) {
+        feeds.add(href);
+      }
     }
   );
 
@@ -174,6 +178,9 @@ export const fetchViaScrapingBee = async (url) => {
 // ---------------- SMART FETCH (FIXED) ----------------
 
 export const smartFetch = async (url) => {
+  // Validate URL for SSRF protection
+  validateUrl(url);
+
   // 1️⃣ Direct RSS
   const direct = await fetchDirect(url);
   if (direct.length) return direct;

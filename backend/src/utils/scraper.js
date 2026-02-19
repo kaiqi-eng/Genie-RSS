@@ -1,12 +1,17 @@
 import axios from 'axios';
 import * as cheerio from 'cheerio';
+import { validateUrl } from './urlValidator.js';
 
 /**
  * Scrape a website for content to generate an RSS feed
  * @param {string} url - The website URL to scrape
  * @returns {object} - Scraped website data
+ * @throws {UrlValidationError} - If URL is invalid or blocked (SSRF protection)
  */
 export async function scrapeWebsite(url) {
+  // Validate URL for SSRF protection
+  validateUrl(url);
+
   try {
     const response = await axios.get(url, {
       headers: {
