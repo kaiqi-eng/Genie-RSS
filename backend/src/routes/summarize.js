@@ -1,7 +1,9 @@
 import express from "express";
 import { summarizeFeeds } from "../services/feedSummarizer.js";
+import { createLogger } from "../utils/logger.js";
 
 const router = express.Router();
+const logger = createLogger('routes:summarize');
 
 router.post("/", async (req, res) => {
   try {
@@ -21,7 +23,7 @@ router.post("/", async (req, res) => {
     });
 
   } catch (err) {
-    console.error("Summarize route error:", err);
+    logger.error('Summarize route error', { error: err });
     res.status(500).json({
       error: err.message,
     });

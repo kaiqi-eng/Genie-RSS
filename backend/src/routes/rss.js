@@ -4,8 +4,10 @@ import { fetchAndParseRss } from '../services/rssFetcher.js';
 import { scrapeWebsite } from '../utils/scraper.js';
 import { generateRssFeed } from '../services/rssGenerator.js';
 import { validateUrl, UrlValidationError } from '../utils/urlValidator.js';
+import { createLogger } from '../utils/logger.js';
 
 const router = express.Router();
+const logger = createLogger('routes:rss');
 
 router.post('/fetch', async (req, res) => {
   try {
@@ -50,10 +52,10 @@ router.post('/fetch', async (req, res) => {
     });
 
   } catch (error) {
-    console.error('Error processing RSS request:', error);
-    res.status(500).json({ 
+    logger.error('Error processing RSS request', { url: req.body?.url, error });
+    res.status(500).json({
       error: 'Failed to process request',
-      message: error.message 
+      message: error.message
     });
   }
 });

@@ -1,6 +1,9 @@
 import axios from 'axios';
 import * as cheerio from 'cheerio';
 import { validateUrl } from './urlValidator.js';
+import { createLogger } from './logger.js';
+
+const logger = createLogger('utils:scraper');
 
 /**
  * Scrape a website for content to generate an RSS feed
@@ -54,7 +57,7 @@ export async function scrapeWebsite(url) {
       scrapedAt: new Date().toISOString()
     };
   } catch (error) {
-    console.error('Error scraping website:', error.message);
+    logger.error('Error scraping website', { url, error });
     throw new Error(`Failed to scrape website: ${error.message}`);
   }
 }

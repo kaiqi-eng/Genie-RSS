@@ -1,6 +1,9 @@
 import axios from 'axios';
 import * as cheerio from 'cheerio';
 import { validateUrl, UrlValidationError } from '../utils/urlValidator.js';
+import { createLogger } from '../utils/logger.js';
+
+const logger = createLogger('services:rssDiscovery');
 
 // Common RSS feed URL patterns to check
 const COMMON_FEED_PATHS = [
@@ -84,7 +87,7 @@ export async function discoverRssFeed(url) {
 
     return null;
   } catch (error) {
-    console.error('Error discovering RSS feed:', error.message);
+    logger.error('Error discovering RSS feed', { url, error });
     return null;
   }
 }

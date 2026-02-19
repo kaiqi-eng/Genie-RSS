@@ -1,4 +1,7 @@
 import crypto from 'crypto';
+import { createLogger } from '../utils/logger.js';
+
+const logger = createLogger('auth');
 
 /**
  * API Key Authentication Middleware
@@ -36,7 +39,7 @@ export const apiKeyAuth = (req, res, next) => {
 
   // Check if API_KEY is configured
   if (!validApiKey) {
-    console.warn('WARNING: API_KEY not set in environment. API is unprotected!');
+    logger.warn('API_KEY not set in environment - API is unprotected');
     return next();
   }
 

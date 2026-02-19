@@ -1,8 +1,10 @@
 import express from "express";
 import { processFeeds } from "../services/feedprocess.js";
 import { validateUrls, UrlValidationError } from "../utils/urlValidator.js";
+import { createLogger } from "../utils/logger.js";
 
 const router = express.Router();
+const logger = createLogger('routes:feed');
 
 
 router.post("/processfeed", async (req, res) => {
@@ -50,7 +52,7 @@ router.post("/processfeed", async (req, res) => {
 
     res.json(feedResult);
   } catch (err) {
-    console.error("Feed process error:", err);
+    logger.error('Feed process error', { error: err });
     if (err instanceof UrlValidationError) {
       return res.status(400).json({ error: err.message, code: err.code });
     }

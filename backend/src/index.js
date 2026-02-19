@@ -7,28 +7,26 @@ import thirdEyeRoutes from './routes/feed.js';
 import summarizeRoutes from "./routes/summarize.js";
 import transcriptRoutes from "./routes/transcripts.js";
 import intelRoutes from './routes/intel.js';
+import { createLogger } from './utils/logger.js';
 
 dotenv.config();
+
+const logger = createLogger('server');
 
 const app = express();
 const PORT = process.env.PORT || 3001;
 
 // Process-level error handlers to prevent crashes
 process.on('unhandledRejection', (reason, promise) => {
-  console.error('[UNHANDLED REJECTION]', {
-    timestamp: new Date().toISOString(),
+  logger.error('Unhandled promise rejection', {
     reason: reason instanceof Error ? reason.message : reason,
-    stack: reason instanceof Error ? reason.stack : undefined
+    error: reason instanceof Error ? reason : undefined
   });
   // Don't exit in production - log for monitoring
 });
 
 process.on('uncaughtException', (error) => {
-  console.error('[UNCAUGHT EXCEPTION]', {
-    timestamp: new Date().toISOString(),
-    message: error.message,
-    stack: error.stack
-  });
+  logger.error('Uncaught exception - shutting down', { error });
   // Give time to log, then exit (uncaught exceptions leave app in undefined state)
   process.exit(1);
 });
@@ -61,12 +59,10 @@ app.use((req, res, next) => {
 
 // Global error handler (must be last middleware)
 app.use((err, req, res, next) => {
-  console.error('[EXPRESS ERROR]', {
-    timestamp: new Date().toISOString(),
+  logger.error('Express error', {
     method: req.method,
     path: req.path,
-    message: err.message,
-    stack: process.env.NODE_ENV === 'development' ? err.stack : undefined
+    error: err
   });
 
   // Don't leak error details in production
@@ -80,7 +76,7 @@ app.use((err, req, res, next) => {
 // Only start server if not in test mode
 if (process.env.NODE_ENV !== 'test') {
   app.listen(PORT, () => {
-    console.log(`Server running on http://localhost:${PORT}`);
+    logger.info('Server started', { port: PORT, url: `http://localhost:${PORT}` });
   });
 }
 

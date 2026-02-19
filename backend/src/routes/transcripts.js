@@ -1,7 +1,9 @@
 import express from "express";
 import { summarizeTranscript } from "../services/otterTranscript.js";
+import { createLogger } from "../utils/logger.js";
 
 const router = express.Router();
+const logger = createLogger('routes:transcripts');
 
 // Increase JSON body limit for large transcripts
 router.use(express.json({ limit: "10mb" }));
@@ -15,7 +17,7 @@ router.post("/summarize", async (req, res) => {
 
     let { transcripts } = req.body;
 
-    console.log("Received transcripts for summarization:", req.body);
+    logger.debug('Received transcripts for summarization', { count: req.body?.transcripts?.length });
 
     // Handle raw string payload (if ngrok mangled JSON)
     if (typeof transcripts === "string") {
@@ -32,12 +34,12 @@ router.post("/summarize", async (req, res) => {
       });
     }
 
-    console.log("Received transcripts for summarization:", transcripts);
+    logger.info('Processing transcript summarization', { transcriptCount: transcripts.length });
     const result = await summarizeTranscript(transcripts);
 
     return res.status(200).json(result);
   } catch (error) {
-    console.error("Transcript summarization error:", error);
+    logger.error('Transcript summarization error', { error });
 
     return res.status(500).json({
       error: "Failed to summarize transcript",
