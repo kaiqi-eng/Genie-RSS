@@ -22,14 +22,16 @@
 | Feature | Status |
 |---------|--------|
 | API Key Authentication | ✅ Implemented |
-| Timing-Safe Auth | ❌ Not implemented |
-| Rate Limiting | ❌ Not implemented |
-| Input Validation | ⚠️ Basic (URL format only) |
-| SSRF Protection | ❌ Not implemented |
-| Global Error Handler | ❌ Not implemented |
-| Structured Logging | ❌ Not implemented |
-| Request Caching | ❌ Not implemented |
-| Unit Tests | ❌ None |
+| Timing-Safe Auth | ✅ Implemented |
+| Rate Limiting | ✅ Implemented |
+| Input Validation | ✅ Implemented (Zod) |
+| SSRF Protection | ✅ Implemented |
+| Global Error Handler | ✅ Implemented |
+| Structured Logging | ✅ Implemented |
+| Request Logging | ✅ Implemented |
+| Request Caching | ✅ Implemented |
+| Centralized Config | ✅ Implemented |
+| Unit Tests | ✅ 117 tests passing |
 | API Documentation | ❌ Not implemented |
 
 ---
@@ -482,43 +484,65 @@ npm outdated
 
 ## Implementation Roadmap
 
-### Phase 1: Critical (Do First)
-| Task | Priority | Effort |
+### Phase 1: Critical (Do First) ✅ COMPLETE
+| Task | Priority | Status |
 |------|----------|--------|
-| Add timing-safe API key comparison | Critical | Low |
-| Add global error handler | Critical | Low |
-| Add URL validation (SSRF protection) | Critical | Medium |
-| Set up basic test framework | Critical | Medium |
+| Add timing-safe API key comparison | Critical | ✅ Done |
+| Add global error handler | Critical | ✅ Done |
+| Add URL validation (SSRF protection) | Critical | ✅ Done |
+| Set up basic test framework | Critical | ✅ Done |
 
-### Phase 2: High Priority
-| Task | Priority | Effort |
+### Phase 2: High Priority ✅ COMPLETE
+| Task | Priority | Status |
 |------|----------|--------|
-| Add structured logging | High | Medium |
-| Implement request caching | High | Medium |
-| Parallelize webhook calls | High | Low |
-| Add rate limiting | High | Medium |
-| Extract duplicate route code | High | Low |
+| Add structured logging | High | ✅ Done |
+| Implement request caching | High | ✅ Done |
+| Parallelize webhook calls | High | ✅ Done |
+| Add rate limiting | High | ✅ Done |
+| Extract duplicate route code | High | ✅ Done |
 
-### Phase 3: Medium Priority
-| Task | Priority | Effort |
+### Phase 3: Medium Priority ✅ COMPLETE
+| Task | Priority | Status |
 |------|----------|--------|
-| Add request/response validation (Zod) | Medium | Medium |
-| Externalize hardcoded config | Medium | Low |
-| Add JSDoc documentation | Medium | Medium |
-| Set up OpenAPI/Swagger docs | Medium | High |
-| Add performance metrics | Medium | Medium |
+| Add request/response validation (Zod) | Medium | ✅ Done |
+| Externalize hardcoded config | Medium | ✅ Done |
+| Add request logging middleware | Medium | ✅ Done |
+| Add JSDoc documentation | Medium | ⏳ Partial |
+| Set up OpenAPI/Swagger docs | Medium | ❌ Pending |
 
-### Phase 4: Low Priority
-| Task | Priority | Effort |
+### Phase 4: Low Priority (Future)
+| Task | Priority | Status |
 |------|----------|--------|
-| Add dependency injection | Low | High |
-| Implement JWT auth option | Low | High |
-| Add API key rotation | Low | Medium |
-| Set up CI/CD pipeline | Low | Medium |
+| Add dependency injection | Low | ❌ Pending |
+| Implement JWT auth option | Low | ❌ Pending |
+| Add API key rotation | Low | ❌ Pending |
+| Set up CI/CD pipeline | Low | ❌ Pending |
 
 ---
 
 ## Changelog
+
+### v1.3.0 - Validation, Config & Logging Update
+- Added Zod request validation schemas for all endpoints
+- Created centralized configuration (`src/config/index.js`)
+- Externalized all hardcoded timeouts, body limits, and content limits
+- Added request logging middleware with unique request IDs
+- Sanitized sensitive data in logs (headers, body fields)
+- Added 49 new tests (117 total)
+
+### v1.2.0 - Performance & Reliability Update
+- Added structured JSON logging with log levels
+- Implemented RSS feed caching with configurable TTL
+- Parallelized webhook calls using `Promise.allSettled()`
+- Added rate limiting middleware (5 attempts / 15 minutes)
+- Extracted duplicate code in intel routes
+
+### v1.1.1 - Security Hardening
+- Added timing-safe API key comparison (`crypto.timingSafeEqual`)
+- Added global error handlers (`unhandledRejection`, `uncaughtException`)
+- Implemented SSRF protection (blocks private IPs, metadata endpoints)
+- Set up Jest test framework with 35 initial tests
+- Added `node-cache` and `zod` dependencies
 
 ### v1.1.0 - Security Update
 - Added API key authentication middleware
