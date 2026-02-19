@@ -45,6 +45,10 @@ export const apiKeyAuth = (req, res, next) => {
 
   // Validate the provided key
   if (!apiKey) {
+    // Record failed attempt for rate limiting
+    if (req.rateLimit) {
+      req.rateLimit.recordFailure();
+    }
     return res.status(401).json({
       error: 'Unauthorized',
       message: 'Missing X-API-Key header'
@@ -53,10 +57,20 @@ export const apiKeyAuth = (req, res, next) => {
 
   // Use timing-safe comparison to prevent timing attacks
   if (!timingSafeCompare(apiKey, validApiKey)) {
+    // Record failed attempt for rate limiting
+    if (req.rateLimit) {
+      req.rateLimit.recordFailure();
+    }
+    logger.warn('Invalid API key attempt', { ip: req.rateLimit?.ip || 'unknown' });
     return res.status(401).json({
       error: 'Unauthorized',
       message: 'Invalid API key'
     });
+  }
+
+  // Clear failed attempts on successful auth
+  if (req.rateLimit) {
+    req.rateLimit.clearFailures();
   }
 
   next();

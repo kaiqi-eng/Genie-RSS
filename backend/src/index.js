@@ -2,6 +2,7 @@ import express from 'express';
 import cors from 'cors';
 import dotenv from 'dotenv';
 import { apiKeyAuth } from './middleware/auth.js';
+import { rateLimitMiddleware } from './middleware/rateLimit.js';
 import rssRoutes from './routes/rss.js';
 import thirdEyeRoutes from './routes/feed.js';
 import summarizeRoutes from "./routes/summarize.js";
@@ -37,11 +38,12 @@ app.use(express.json()); // Must be before routes
 app.use(express.urlencoded({ extended: true }));
 
 // Protected Routes (require API key)
-app.use('/api/rss', apiKeyAuth, rssRoutes);
-app.use('/api/rss/feed', apiKeyAuth, thirdEyeRoutes);
-app.use("/api/summarize", apiKeyAuth, summarizeRoutes);
-app.use("/api/transcript", apiKeyAuth, transcriptRoutes);
-app.use('/api/intel', apiKeyAuth, intelRoutes);
+// Rate limiting is applied first to block IPs with excessive failed auth attempts
+app.use('/api/rss', rateLimitMiddleware, apiKeyAuth, rssRoutes);
+app.use('/api/rss/feed', rateLimitMiddleware, apiKeyAuth, thirdEyeRoutes);
+app.use("/api/summarize", rateLimitMiddleware, apiKeyAuth, summarizeRoutes);
+app.use("/api/transcript", rateLimitMiddleware, apiKeyAuth, transcriptRoutes);
+app.use('/api/intel', rateLimitMiddleware, apiKeyAuth, intelRoutes);
 
 
 // Health check
