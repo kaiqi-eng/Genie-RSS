@@ -1,23 +1,20 @@
 import Parser from 'rss-parser';
 import NodeCache from 'node-cache';
 import { createLogger } from '../utils/logger.js';
+import { cache, timeouts } from '../config/index.js';
 
 const logger = createLogger('services:rssFetcher');
 
-// Cache configuration
-const CACHE_TTL = parseInt(process.env.RSS_CACHE_TTL) || 3600; // Default: 1 hour
-const CACHE_CHECK_PERIOD = parseInt(process.env.RSS_CACHE_CHECK_PERIOD) || 600; // Default: 10 minutes
-
-// Initialize cache
+// Initialize cache with centralized config
 const feedCache = new NodeCache({
-  stdTTL: CACHE_TTL,
-  checkperiod: CACHE_CHECK_PERIOD,
+  stdTTL: cache.rssTtl,
+  checkperiod: cache.rssCheckPeriod,
   useClones: true, // Return clones to prevent mutation
   deleteOnExpire: true
 });
 
 const parser = new Parser({
-  timeout: 10000,
+  timeout: timeouts.rssFetch,
   headers: {
     'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/91.0.4472.124 Safari/537.36'
   },

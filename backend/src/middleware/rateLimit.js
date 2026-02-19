@@ -1,10 +1,11 @@
 import { createLogger } from '../utils/logger.js';
+import { rateLimit as rateLimitConfig } from '../config/index.js';
 
 const logger = createLogger('middleware:rateLimit');
 
-// Configuration
-const MAX_FAILED_ATTEMPTS = parseInt(process.env.RATE_LIMIT_MAX_ATTEMPTS, 10) || 5;
-const WINDOW_MS = parseInt(process.env.RATE_LIMIT_WINDOW_MS, 10) || 15 * 60 * 1000; // 15 minutes
+// Configuration from centralized config
+const MAX_FAILED_ATTEMPTS = rateLimitConfig.maxAttempts;
+const WINDOW_MS = rateLimitConfig.windowMs;
 
 // In-memory store for tracking failed attempts
 const failedAttempts = new Map();

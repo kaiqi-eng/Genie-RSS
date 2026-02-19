@@ -22,7 +22,10 @@ describe('RSS Routes', () => {
         .send({})
         .expect(400);
 
-      expect(res.body.error).toBe('URL is required');
+      // Zod validation returns 'Validation failed' with details
+      expect(res.body.error).toBe('Validation failed');
+      expect(res.body.details).toBeDefined();
+      expect(res.body.details[0].field).toBe('url');
     });
 
     it('should reject invalid URL format', async () => {
@@ -32,7 +35,9 @@ describe('RSS Routes', () => {
         .send({ url: 'not-a-valid-url' })
         .expect(400);
 
-      expect(res.body.error).toMatch(/Invalid URL/i);
+      // Zod validation returns 'Validation failed' with details about invalid URL
+      expect(res.body.error).toBe('Validation failed');
+      expect(res.body.details[0].message).toMatch(/Invalid URL/i);
     });
 
     it('should reject private IP addresses (SSRF protection)', async () => {

@@ -2,6 +2,7 @@ import axios from 'axios';
 import * as cheerio from 'cheerio';
 import { validateUrl } from './urlValidator.js';
 import { createLogger } from './logger.js';
+import { timeouts, limits } from '../config/index.js';
 
 const logger = createLogger('utils:scraper');
 
@@ -22,7 +23,7 @@ export async function scrapeWebsite(url) {
         'Accept': 'text/html,application/xhtml+xml,application/xml;q=0.9,*/*;q=0.8',
         'Accept-Language': 'en-US,en;q=0.5'
       },
-      timeout: 15000
+      timeout: timeouts.scraper
     });
 
     const $ = cheerio.load(response.data);
@@ -129,8 +130,8 @@ function extractContentItems($, baseUrl) {
     });
   }
 
-  // Limit to 20 items
-  return items.slice(0, 20);
+  // Limit items based on config
+  return items.slice(0, limits.maxScrapedItems);
 }
 
 /**

@@ -2,6 +2,7 @@ import express from 'express';
 import axios from 'axios';
 import { validateUrls } from '../utils/urlValidator.js';
 import { createLogger } from '../utils/logger.js';
+import { validateIntelUrls, validateDailyIntel } from '../middleware/validator.js';
 
 const router = express.Router();
 const logger = createLogger('routes:intel');
@@ -49,14 +50,8 @@ async function forwardToWebhook(urls, endpoint) {
  */
 async function processIntelUrls(req, res, endpoint, action) {
     try {
+        // Zod validation ensures urls is a non-empty array
         const { urls } = req.body;
-
-        if (!urls || !Array.isArray(urls) || urls.length === 0) {
-            return res.status(400).json({
-                success: false,
-                message: 'URLs array is required'
-            });
-        }
 
         // Validate all URLs for SSRF protection
         const { valid: validUrls, invalid: invalidUrls } = validateUrls(urls);
@@ -99,29 +94,21 @@ async function processIntelUrls(req, res, endpoint, action) {
 }
 
 // Add URL (parallel processing)
-router.post('/addintelurl', (req, res) =>
+router.post('/addintelurl', validateIntelUrls, (req, res) =>
     processIntelUrls(req, res, 'addintelurl', 'Add intel URLs')
 );
 
 // Delete URL (parallel processing)
-router.post('/deleteintelurl', (req, res) =>
+router.post('/deleteintelurl', validateIntelUrls, (req, res) =>
     processIntelUrls(req, res, 'deleteintelurl', 'Delete intel URLs')
 );
 
 
 // Get daily RSS feed
-router.post('/getdailyintel', async (req, res) => {
+router.post('/getdailyintel', validateDailyIntel, async (req, res) => {
     try {
-        const { date } = req.body; // ✅ FIXED
-
-        const dateRegex = /^\d{4}-\d{2}-\d{2}$/;
-
-        if (!date || !dateRegex.test(date)) {
-            return res.status(400).json({
-                success: false,
-                message: 'Date is required in format YYYY-MM-DD'
-            });
-        }
+        // Zod validation ensures date is in YYYY-MM-DD format
+        const { date } = req.body;
 
         const response = await axios.post(
             `${WEBHOOK_URL}/getdailyintel`,

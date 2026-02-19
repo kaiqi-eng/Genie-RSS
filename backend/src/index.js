@@ -3,6 +3,7 @@ import cors from 'cors';
 import dotenv from 'dotenv';
 import { apiKeyAuth } from './middleware/auth.js';
 import { rateLimitMiddleware } from './middleware/rateLimit.js';
+import { requestLoggerMiddleware } from './middleware/requestLogger.js';
 import rssRoutes from './routes/rss.js';
 import thirdEyeRoutes from './routes/feed.js';
 import summarizeRoutes from "./routes/summarize.js";
@@ -37,6 +38,9 @@ app.use(cors());
 app.use(express.json()); // Must be before routes
 app.use(express.urlencoded({ extended: true }));
 
+// Request logging (after body parsing so we can log request bodies)
+app.use(requestLoggerMiddleware);
+
 // Protected Routes (require API key)
 // Rate limiting is applied first to block IPs with excessive failed auth attempts
 app.use('/api/rss', rateLimitMiddleware, apiKeyAuth, rssRoutes);
@@ -62,6 +66,7 @@ app.use((req, res, next) => {
 // Global error handler (must be last middleware)
 app.use((err, req, res, next) => {
   logger.error('Express error', {
+    requestId: req.requestId,
     method: req.method,
     path: req.path,
     error: err
@@ -71,6 +76,7 @@ app.use((err, req, res, next) => {
   const statusCode = err.statusCode || err.status || 500;
   res.status(statusCode).json({
     error: statusCode === 500 ? 'Internal Server Error' : err.message,
+    requestId: req.requestId,
     ...(process.env.NODE_ENV === 'development' && { stack: err.stack })
   });
 });

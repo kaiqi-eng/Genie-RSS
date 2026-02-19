@@ -1,38 +1,25 @@
 import express from "express";
 import { summarizeTranscript } from "../services/otterTranscript.js";
 import { createLogger } from "../utils/logger.js";
+import { validateTranscriptSummarize } from "../middleware/validator.js";
+import { bodyLimits } from "../config/index.js";
 
 const router = express.Router();
 const logger = createLogger('routes:transcripts');
 
 // Increase JSON body limit for large transcripts
-router.use(express.json({ limit: "10mb" }));
+router.use(express.json({ limit: bodyLimits.transcript }));
 
 /**
  * POST /api/transcript/summarize
  * Summarize multiple transcripts into one combined summary
  */
-router.post("/summarize", async (req, res) => {
+router.post("/summarize", validateTranscriptSummarize, async (req, res) => {
   try {
+    // Zod validation handles JSON string parsing and array validation
+    const { transcripts } = req.body;
 
-    let { transcripts } = req.body;
-
-    logger.debug('Received transcripts for summarization', { count: req.body?.transcripts?.length });
-
-    // Handle raw string payload (if ngrok mangled JSON)
-    if (typeof transcripts === "string") {
-      try {
-        transcripts = JSON.parse(transcripts);
-      } catch (err) {
-        return res.status(400).json({ error: "Invalid JSON string in 'transcripts'" });
-      }
-    }
-
-    if (!Array.isArray(transcripts) || transcripts.length === 0) {
-      return res.status(400).json({
-        error: "transcripts must be a non-empty array",
-      });
-    }
+    logger.debug('Received transcripts for summarization', { count: transcripts?.length });
 
     logger.info('Processing transcript summarization', { transcriptCount: transcripts.length });
     const result = await summarizeTranscript(transcripts);

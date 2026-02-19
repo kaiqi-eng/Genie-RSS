@@ -2,6 +2,7 @@ import axios from 'axios';
 import * as cheerio from 'cheerio';
 import { validateUrl, UrlValidationError } from '../utils/urlValidator.js';
 import { createLogger } from '../utils/logger.js';
+import { timeouts } from '../config/index.js';
 
 const logger = createLogger('services:rssDiscovery');
 
@@ -37,7 +38,7 @@ export async function discoverRssFeed(url) {
       headers: {
         'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/91.0.4472.124 Safari/537.36'
       },
-      timeout: 10000
+      timeout: timeouts.rssDiscovery
     });
 
     const $ = cheerio.load(response.data);
@@ -103,7 +104,7 @@ async function checkFeedExists(url) {
       headers: {
         'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36'
       },
-      timeout: 5000
+      timeout: timeouts.rssDiscoveryFast
     });
 
     const contentType = response.headers['content-type'] || '';
@@ -120,7 +121,7 @@ async function checkFeedExists(url) {
           'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36',
           'Range': 'bytes=0-500'
         },
-        timeout: 5000
+        timeout: timeouts.rssDiscoveryFast
       });
 
       const data = response.data.toString().toLowerCase();

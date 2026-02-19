@@ -5,17 +5,14 @@ import { scrapeWebsite } from '../utils/scraper.js';
 import { generateRssFeed } from '../services/rssGenerator.js';
 import { validateUrl, UrlValidationError } from '../utils/urlValidator.js';
 import { createLogger } from '../utils/logger.js';
+import { validateRssFetch } from '../middleware/validator.js';
 
 const router = express.Router();
 const logger = createLogger('routes:rss');
 
-router.post('/fetch', async (req, res) => {
+router.post('/fetch', validateRssFetch, async (req, res) => {
   try {
     const { url } = req.body;
-
-    if (!url) {
-      return res.status(400).json({ error: 'URL is required' });
-    }
 
     // Validate URL with SSRF protection
     try {
