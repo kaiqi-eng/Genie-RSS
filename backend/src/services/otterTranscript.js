@@ -1,24 +1,37 @@
 import { ChatOpenAI } from "@langchain/openai";
 import { HumanMessage } from "@langchain/core/messages";
 import { createLogger } from "../utils/logger.js";
+import { timeouts } from "../config/index.js";
 
 const logger = createLogger('services:otterTranscript');
 
-if (!process.env.OPENAI_API_KEY) {
-  throw new Error("OPENAI_API_KEY is missing");
-}
+// Lazy-initialized LLM instance to avoid crash on module load
+let llm = null;
 
-const llm = new ChatOpenAI({
-  model: "gpt-3.5-turbo-0125",
-  temperature: 0,
-  apiKey: process.env.OPENAI_API_KEY,
-});
+/**
+ * Get or create the LLM instance (lazy initialization)
+ * Throws at runtime only when actually needed, not at module load
+ */
+function getLLM() {
+  if (!llm) {
+    if (!process.env.OPENAI_API_KEY) {
+      throw new Error("OPENAI_API_KEY is not configured");
+    }
+    llm = new ChatOpenAI({
+      model: "gpt-3.5-turbo-0125",
+      temperature: 0,
+      apiKey: process.env.OPENAI_API_KEY,
+      timeout: timeouts.llm,
+    });
+  }
+  return llm;
+}
 
 /**
  * Clean Slack/Otter transcript text for prompt
  * Removes raw line breaks and excessive whitespace
  */
-function cleanTranscript(text) {
+export function cleanTranscript(text) {
   if (!text) return "";
   return text
     .replace(/[\r\n]+/g, " ")  // convert newlines to spaces
@@ -27,23 +40,9 @@ function cleanTranscript(text) {
 }
 
 /**
- * Escape quotes inside JSON strings
- */
-function escapeJSONString(str) {
-  if (!str) return "";
-  return str
-    .replace(/\\/g, "\\\\")
-    .replace(/"/g, '\\"')
-    .replace(/\r?\n/g, "\\n")
-    .replace(/\t/g, "\\t")
-    .replace(/[\u0000-\u001F]+/g, " ")
-    .trim();
-}
-
-/**
  * Extract first JSON object/array from string
  */
-function extractJSON(str) {
+export function extractJSON(str) {
   const match = str.match(/\{[\s\S]*\}|\[[\s\S]*\]/);
   if (!match) throw new Error("No JSON object found in LLM output");
   return JSON.parse(match[0]);
@@ -109,7 +108,8 @@ export async function summarizeTranscript(feeds) {
 
   let response;
   try {
-    response = await llm.invoke([new HumanMessage(prompt)]);
+    const llmInstance = getLLM();
+    response = await llmInstance.invoke([new HumanMessage(prompt)]);
   } catch (err) {
     throw new Error("LLM request failed: " + err.message);
   }
@@ -126,6 +126,9 @@ export async function summarizeTranscript(feeds) {
     throw new Error("LLM returned invalid JSON");
   }
 
+  // Safely extract the first item, defaulting to empty object if missing
+  const item = parsed.items[0] || {};
+
   // Return a single item combining all transcript content
   return {
     total_feeds: feeds.length,
@@ -135,18 +138,18 @@ export async function summarizeTranscript(feeds) {
         source: "otter.ai",
         published: "",
         content: feeds.map(f => (typeof f === "string" ? f : f.content || "")).join("\n\n"),
-        summary: parsed.items[0].summary || "No summary generated",
-        key_themes: Array.isArray(parsed.items[0].key_themes) ? parsed.items[0].key_themes : [],
-        important_developments: Array.isArray(parsed.items[0].important_developments)
-          ? parsed.items[0].important_developments
+        summary: item.summary || "No summary generated",
+        key_themes: Array.isArray(item.key_themes) ? item.key_themes : [],
+        important_developments: Array.isArray(item.important_developments)
+          ? item.important_developments
           : [],
-        risks_or_opportunities: Array.isArray(parsed.items[0].risks_or_opportunities)
-          ? parsed.items[0].risks_or_opportunities
+        risks_or_opportunities: Array.isArray(item.risks_or_opportunities)
+          ? item.risks_or_opportunities
           : [],
         payable_work_validation: {
-          payable_work_done: parsed.items[0].payable_work_validation?.payable_work_done === true,
-          payable_work_evidence: parsed.items[0].payable_work_validation?.payable_work_evidence || "",
-          confidence: parsed.items[0].payable_work_validation?.confidence || "low",
+          payable_work_done: item.payable_work_validation?.payable_work_done === true,
+          payable_work_evidence: item.payable_work_validation?.payable_work_evidence || "",
+          confidence: item.payable_work_validation?.confidence || "low",
         },
       }
     ],
