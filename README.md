@@ -71,6 +71,7 @@ Genie-RSS/
 | `NEWSLETTER_EMAIL` | No | Gmail for newsletter extraction |
 | `NEWSLETTER_PASSWORD` | No | Gmail app password |
 | `PORT` | No | Server port (default: 3001) |
+| `LLM_TIMEOUT` | No | LLM API timeout in ms (default: 60000) |
 
 ### Running the Application
 

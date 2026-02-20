@@ -1,6 +1,7 @@
 import { ChatOpenAI } from "@langchain/openai";
 import { HumanMessage } from "@langchain/core/messages";
 import { createLogger } from "../utils/logger.js";
+import { timeouts } from "../config/index.js";
 
 const logger = createLogger('services:otterTranscript');
 
@@ -20,6 +21,7 @@ function getLLM() {
       model: "gpt-3.5-turbo-0125",
       temperature: 0,
       apiKey: process.env.OPENAI_API_KEY,
+      timeout: timeouts.llm,
     });
   }
   return llm;
