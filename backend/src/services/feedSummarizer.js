@@ -1,6 +1,9 @@
 import { ChatOpenAI } from "@langchain/openai";
 import { HumanMessage } from "@langchain/core/messages";
 import { timeouts } from "../config/index.js";
+import { createLogger } from "../utils/logger.js";
+
+const logger = createLogger('services:feedSummarizer');
 
 // Lazy-initialized LLM instance to avoid crash on module load
 let llm = null;
@@ -68,17 +71,26 @@ export async function summarizeFeeds(feeds) {
     throw new Error("feeds must be a non-empty array");
   }
 
+  logger.info('Processing feed summarization', { feedCount: feeds.length });
+
   const prompt = buildPrompt(feeds);
 
-  const llmInstance = getLLM();
-  const response = await llmInstance.invoke([
-    new HumanMessage(prompt),
-  ]);
+  let response;
+  try {
+    const llmInstance = getLLM();
+    response = await llmInstance.invoke([
+      new HumanMessage(prompt),
+    ]);
+  } catch (err) {
+    logger.error('LLM request failed', { error: err });
+    throw new Error("LLM request failed: " + err.message);
+  }
 
   let parsed;
   try {
     parsed = JSON.parse(response.content);
   } catch (err) {
+    logger.error('Invalid JSON from LLM', { content: response.content, error: err });
     throw new Error("LLM returned invalid JSON");
   }
 
@@ -93,6 +105,8 @@ export async function summarizeFeeds(feeds) {
     content: feed.content || "",
     summary: parsedItems[index]?.summary || "No summary generated",
   }));
+
+  logger.info('Feed summarization completed', { feedCount: feeds.length, itemCount: items.length });
 
   return {
     total_feeds: feeds.length,
