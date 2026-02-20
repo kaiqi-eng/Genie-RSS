@@ -1,5 +1,6 @@
 import { ChatOpenAI } from "@langchain/openai";
 import { HumanMessage } from "@langchain/core/messages";
+import { timeouts } from "../config/index.js";
 
 // Lazy-initialized LLM instance to avoid crash on module load
 let llm = null;
@@ -17,6 +18,7 @@ function getLLM() {
       model: "gpt-3.5-turbo-0125",
       temperature: 0,
       apiKey: process.env.OPENAI_API_KEY,
+      timeout: timeouts.llm,
     });
   }
   return llm;
