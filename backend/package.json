@@ -29,5 +29,10 @@
   "devDependencies": {
     "jest": "^29.7.0",
     "supertest": "^6.3.4"
+    "dotenv": "^16.4.0",
+    "@langchain/openai": "^1.0.0",
+    "@langchain/core": "^1.0.0",
+    "xml2js": "^0.4.23",
+    "imap-simple": "^5.0.0"
   }
 }
