@@ -1,48 +1,83 @@
 import express from 'express';
 import axios from 'axios';
+import { validateUrls } from '../utils/urlValidator.js';
+import { createLogger } from '../utils/logger.js';
+import { validateIntelUrls, validateDailyIntel } from '../middleware/validator.js';
 
 const router = express.Router();
+const logger = createLogger('routes:intel');
 
 const WEBHOOK_URL = process.env.WEBHOOK_URL;
 
-// Add URL
-router.post('/addintelurl', async (req, res) => {
+/**
+ * Forward URLs to webhook endpoint in parallel
+ * @param {string[]} urls - Array of URLs to forward
+ * @param {string} endpoint - Webhook endpoint name (e.g., 'addintelurl', 'deleteintelurl')
+ * @returns {Promise<Array>} - Array of results for each URL
+ */
+async function forwardToWebhook(urls, endpoint) {
+    const startTime = Date.now();
+
+    const results = await Promise.allSettled(
+        urls.map(url =>
+            axios.post(`${WEBHOOK_URL}/${endpoint}`, { url })
+                .then(response => ({
+                    url,
+                    success: true,
+                    data: response.data
+                }))
+                .catch(err => ({
+                    url,
+                    success: false,
+                    error: err.response?.data || err.message
+                }))
+        )
+    );
+
+    const duration = Date.now() - startTime;
+    logger.debug(`Forwarded ${urls.length} URLs to ${endpoint}`, { duration, urlCount: urls.length });
+
+    // Extract values from Promise.allSettled results
+    return results.map(result => result.value);
+}
+
+/**
+ * Process intel URL request (shared logic for add/delete)
+ * @param {object} req - Express request
+ * @param {object} res - Express response
+ * @param {string} endpoint - Webhook endpoint
+ * @param {string} action - Action description for logging
+ */
+async function processIntelUrls(req, res, endpoint, action) {
     try {
+        // Zod validation ensures urls is a non-empty array
         const { urls } = req.body;
 
-        if (!urls || !Array.isArray(urls) || urls.length === 0) {
-            return res.status(400).json({
-                success: false,
-                message: 'URLs array is required'
-            });
-        }
+        // Validate all URLs for SSRF protection
+        const { valid: validUrls, invalid: invalidUrls } = validateUrls(urls);
 
-        const results = [];
+        // Build results array with invalid URLs first
+        const invalidResults = invalidUrls.map(({ url, error }) => ({
+            url,
+            success: false,
+            error: `URL validation failed: ${error}`
+        }));
 
-        // Send one by one (strictly sequential)
-        for (let i = 0; i < urls.length; i++) {
-            const url = urls[i];
+        // Forward valid URLs to webhook in parallel
+        const validResults = validUrls.length > 0
+            ? await forwardToWebhook(validUrls, endpoint)
+            : [];
 
-            try {
-                const response = await axios.post(
-                    `${WEBHOOK_URL}/addintelurl`,
-                    { url }
-                );
+        const results = [...invalidResults, ...validResults];
 
-                results.push({
-                    url,
-                    success: true,
-                    data: response.data
-                });
-
-            } catch (err) {
-                results.push({
-                    url,
-                    success: false,
-                    error: err.response?.data || err.message
-                });
-            }
-        }
+        // Log summary
+        const successCount = results.filter(r => r.success).length;
+        logger.info(`${action} completed`, {
+            total: urls.length,
+            valid: validUrls.length,
+            invalid: invalidUrls.length,
+            successful: successCount
+        });
 
         return res.json({
             success: true,
@@ -50,82 +85,30 @@ router.post('/addintelurl', async (req, res) => {
         });
 
     } catch (error) {
-        console.error(error.response?.data || error.message);
+        logger.error(`Failed to ${action.toLowerCase()}`, { error });
         return res.status(500).json({
             success: false,
-            message: 'Failed to process URLs'
+            message: `Failed to ${action.toLowerCase()}`
         });
     }
-});
+}
 
+// Add URL (parallel processing)
+router.post('/addintelurl', validateIntelUrls, (req, res) =>
+    processIntelUrls(req, res, 'addintelurl', 'Add intel URLs')
+);
 
-// Delete URL
-router.post('/deleteintelurl', async (req, res) => {
-    try {
-        const { urls } = req.body; // expecting array
-
-        if (!urls || !Array.isArray(urls) || urls.length === 0) {
-            return res.status(400).json({
-                success: false,
-                message: 'URLs array is required'
-            });
-        }
-
-        const results = [];
-
-        // Process one by one (sequential)
-        for (let i = 0; i < urls.length; i++) {
-            const url = urls[i];
-
-            try {
-                const response = await axios.post(
-                    `${WEBHOOK_URL}/deleteintelurl`,
-                    { url }
-                );
-
-                results.push({
-                    url,
-                    success: true,
-                    data: response.data
-                });
-
-            } catch (err) {
-                results.push({
-                    url,
-                    success: false,
-                    error: err.response?.data || err.message
-                });
-            }
-        }
-
-        return res.json({
-            success: true,
-            results
-        });
-
-    } catch (error) {
-        console.error(error.response?.data || error.message);
-        return res.status(500).json({
-            success: false,
-            message: 'Failed to delete URLs'
-        });
-    }
-});
+// Delete URL (parallel processing)
+router.post('/deleteintelurl', validateIntelUrls, (req, res) =>
+    processIntelUrls(req, res, 'deleteintelurl', 'Delete intel URLs')
+);
 
 
 // Get daily RSS feed
-router.post('/getdailyintel', async (req, res) => {
+router.post('/getdailyintel', validateDailyIntel, async (req, res) => {
     try {
-        const { date } = req.body; // ✅ FIXED
-
-        const dateRegex = /^\d{4}-\d{2}-\d{2}$/;
-
-        if (!date || !dateRegex.test(date)) {
-            return res.status(400).json({
-                success: false,
-                message: 'Date is required in format YYYY-MM-DD'
-            });
-        }
+        // Zod validation ensures date is in YYYY-MM-DD format
+        const { date } = req.body;
 
         const response = await axios.post(
             `${WEBHOOK_URL}/getdailyintel`,
@@ -135,9 +118,11 @@ router.post('/getdailyintel', async (req, res) => {
         return res.json(response.data);
 
     } catch (error) {
-        console.error("STATUS:", error.response?.status);
-        console.error("DATA:", error.response?.data);
-        console.error("MESSAGE:", error.message);
+        logger.error('Failed to get daily intel', {
+            status: error.response?.status,
+            data: error.response?.data,
+            error
+        });
 
         return res.status(500).json({
             success: false,

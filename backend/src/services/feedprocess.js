@@ -12,17 +12,22 @@ import crypto from "crypto";
 import zlib from "zlib";
 import imaps from "imap-simple";
 import * as cheerio from "cheerio";
+import { validateUrl, isValidUrl } from "../utils/urlValidator.js";
+import { credentials, timeouts } from "../config/index.js";
 
 // ---------------- CONFIG ----------------
 
-const SCRAPINGBEE_API_KEY = process.env.SCRAPINGBEE_API_KEY;
-const NEWSLETTER_EMAIL = process.env.NEWSLETTER_EMAIL;
-const NEWSLETTER_PASSWORD = process.env.NEWSLETTER_PASSWORD;
-const WEBHOOK_URL = process.env.WEBHOOK_URL;
-
-if (!SCRAPINGBEE_API_KEY) {
-  throw new Error("Missing SCRAPINGBEE_API_KEY in .env");
-}
+// Lazy-loaded credentials (allows tests to run without all env vars)
+const getScrapingBeeKey = () => {
+  const key = credentials.scrapingBeeApiKey;
+  if (!key) {
+    throw new Error("Missing SCRAPINGBEE_API_KEY in .env");
+  }
+  return key;
+};
+const NEWSLETTER_EMAIL = credentials.newsletter.email;
+const NEWSLETTER_PASSWORD = credentials.newsletter.password;
+const WEBHOOK_URL = credentials.webhookUrl;
 
 // ---------------- HELPERS ----------------
 
@@ -101,7 +106,10 @@ const discoverFeedUrls = (html, baseUrl) => {
         href = new URL(href, baseUrl).href;
       }
 
-      feeds.add(href);
+      // Validate discovered feed URLs for SSRF protection
+      if (isValidUrl(href)) {
+        feeds.add(href);
+      }
     }
   );
 
@@ -113,7 +121,7 @@ const discoverFeedUrls = (html, baseUrl) => {
 export const fetchDirect = async (url) => {
   try {
     const response = await axios.get(url, {
-      timeout: 15000,
+      timeout: timeouts.feedProcess,
       responseType: "arraybuffer",
       headers: {
         "User-Agent": "Mozilla/5.0",
@@ -134,7 +142,7 @@ export const fetchDirect = async (url) => {
 
 const fetchHtmlDirect = async (url) => {
   const response = await axios.get(url, {
-    timeout: 15000,
+    timeout: timeouts.feedProcess,
     headers: { "User-Agent": "Mozilla/5.0" },
   });
   return response.data;
@@ -143,12 +151,12 @@ const fetchHtmlDirect = async (url) => {
 const fetchHtmlViaScrapingBee = async (url) => {
   const response = await axios.get("https://api.scrapingbee.com/v1/", {
     params: {
-      api_key: SCRAPINGBEE_API_KEY,
+      api_key: getScrapingBeeKey(),
       url,
       render_js: true,
       premium_proxy: true,
     },
-    timeout: 30000,
+    timeout: timeouts.scrapingBee,
   });
   return response.data;
 };
@@ -157,12 +165,12 @@ export const fetchViaScrapingBee = async (url) => {
   try {
     const response = await axios.get("https://api.scrapingbee.com/v1/", {
       params: {
-        api_key: SCRAPINGBEE_API_KEY,
+        api_key: getScrapingBeeKey(),
         url,
         render_js: true,
         premium_proxy: true,
       },
-      timeout: 30000,
+      timeout: timeouts.scrapingBee,
     });
 
     return await parseRSS(response.data, url, "third_eye");
@@ -174,6 +182,9 @@ export const fetchViaScrapingBee = async (url) => {
 // ---------------- SMART FETCH (FIXED) ----------------
 
 export const smartFetch = async (url) => {
+  // Validate URL for SSRF protection
+  validateUrl(url);
+
   // 1️⃣ Direct RSS
   const direct = await fetchDirect(url);
   if (direct.length) return direct;

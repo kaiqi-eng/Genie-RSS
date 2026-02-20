@@ -1,10 +1,14 @@
 import express from "express";
 import { processFeeds } from "../services/feedprocess.js";
+import { validateUrls, UrlValidationError } from "../utils/urlValidator.js";
+import { createLogger } from "../utils/logger.js";
+import { validateFeedProcess } from "../middleware/validator.js";
 
 const router = express.Router();
+const logger = createLogger('routes:feed');
 
 
-router.post("/processfeed", async (req, res) => {
+router.post("/processfeed", validateFeedProcess, async (req, res) => {
   try {
     const payload =
       req.body?.body && typeof req.body.body === "object"
@@ -30,10 +34,29 @@ router.post("/processfeed", async (req, res) => {
       });
     }
 
-    const feedResult = await processFeeds({ feeds: normalizedFeeds });
+    // Validate URLs with SSRF protection
+    const { valid: validFeeds, invalid: invalidFeeds } = validateUrls(normalizedFeeds);
+
+    if (validFeeds.length === 0) {
+      return res.status(400).json({
+        error: "No valid URLs provided",
+        invalidUrls: invalidFeeds
+      });
+    }
+
+    const feedResult = await processFeeds({ feeds: validFeeds });
+
+    // Include info about rejected URLs in response
+    if (invalidFeeds.length > 0) {
+      feedResult.rejectedUrls = invalidFeeds;
+    }
+
     res.json(feedResult);
   } catch (err) {
-    console.error("Feed process error:", err);
+    logger.error('Feed process error', { error: err });
+    if (err instanceof UrlValidationError) {
+      return res.status(400).json({ error: err.message, code: err.code });
+    }
     res.status(500).json({ error: err.message });
   }
 });

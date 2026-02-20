@@ -53,6 +53,25 @@ Genie-RSS/
    npm install
    ```
 
+3. **Configure environment variables:**
+   ```bash
+   cd backend
+   cp .env.example .env
+   # Edit .env with your API keys
+   ```
+
+### Environment Variables
+
+| Variable | Required | Description |
+|----------|----------|-------------|
+| `API_KEY` | Yes | Your API key for authenticating requests |
+| `OPENAI_API_KEY` | Yes | OpenAI API key for AI summarization |
+| `SCRAPINGBEE_API_KEY` | Yes | ScrapingBee API key for feed processing |
+| `WEBHOOK_URL` | No | Webhook URL for intelligence delivery |
+| `NEWSLETTER_EMAIL` | No | Gmail for newsletter extraction |
+| `NEWSLETTER_PASSWORD` | No | Gmail app password |
+| `PORT` | No | Server port (default: 3001) |
+
 ### Running the Application
 
 1. **Start the backend server:**
@@ -98,14 +117,16 @@ Fetches or generates an RSS feed for a given URL.
 **Example (curl):**
 ```bash
 # direct to backend
-curl -X POST "http://localhost:3001/api/rss/fetch" ^
-  -H "Content-Type: application/json" ^
-  -d "{\"url\":\"https://example.com\"}"
+curl -X POST "http://localhost:3001/api/rss/fetch" \
+  -H "Content-Type: application/json" \
+  -H "X-API-Key: your-api-key-here" \
+  -d '{"url":"https://example.com"}'
 
 # via Vite proxy (when frontend dev server is running)
-curl -X POST "http://localhost:3000/api/rss/fetch" ^
-  -H "Content-Type: application/json" ^
-  -d "{\"url\":\"https://example.com\"}"
+curl -X POST "http://localhost:3000/api/rss/fetch" \
+  -H "Content-Type: application/json" \
+  -H "X-API-Key: your-api-key-here" \
+  -d '{"url":"https://example.com"}'
 ```
 
 **Example (browser fetch):**
@@ -113,7 +134,10 @@ curl -X POST "http://localhost:3000/api/rss/fetch" ^
 async function getFeed(url) {
   const res = await fetch("/api/rss/fetch", {
     method: "POST",
-    headers: { "Content-Type": "application/json" },
+    headers: {
+      "Content-Type": "application/json",
+      "X-API-Key": "your-api-key-here"
+    },
     body: JSON.stringify({ url }),
   });
 

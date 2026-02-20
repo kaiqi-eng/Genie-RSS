@@ -1,5 +1,8 @@
 import { ChatOpenAI } from "@langchain/openai";
 import { HumanMessage } from "@langchain/core/messages";
+import { createLogger } from "../utils/logger.js";
+
+const logger = createLogger('services:otterTranscript');
 
 if (!process.env.OPENAI_API_KEY) {
   throw new Error("OPENAI_API_KEY is missing");
@@ -119,7 +122,7 @@ export async function summarizeTranscript(feeds) {
       parsed.items = [parsed.items].filter(Boolean);
     }
   } catch (err) {
-    console.error("Invalid JSON from LLM:", response.content);
+    logger.error('Invalid JSON from LLM', { content: response.content, error: err });
     throw new Error("LLM returned invalid JSON");
   }
 
