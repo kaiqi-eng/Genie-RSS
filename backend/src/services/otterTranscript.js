@@ -138,6 +138,9 @@ export async function summarizeTranscript(feeds) {
     throw new Error("LLM returned invalid JSON");
   }
 
+  // Safely extract the first item, defaulting to empty object if missing
+  const item = parsed.items[0] || {};
+
   // Return a single item combining all transcript content
   return {
     total_feeds: feeds.length,
@@ -147,18 +150,18 @@ export async function summarizeTranscript(feeds) {
         source: "otter.ai",
         published: "",
         content: feeds.map(f => (typeof f === "string" ? f : f.content || "")).join("\n\n"),
-        summary: parsed.items[0].summary || "No summary generated",
-        key_themes: Array.isArray(parsed.items[0].key_themes) ? parsed.items[0].key_themes : [],
-        important_developments: Array.isArray(parsed.items[0].important_developments)
-          ? parsed.items[0].important_developments
+        summary: item.summary || "No summary generated",
+        key_themes: Array.isArray(item.key_themes) ? item.key_themes : [],
+        important_developments: Array.isArray(item.important_developments)
+          ? item.important_developments
           : [],
-        risks_or_opportunities: Array.isArray(parsed.items[0].risks_or_opportunities)
-          ? parsed.items[0].risks_or_opportunities
+        risks_or_opportunities: Array.isArray(item.risks_or_opportunities)
+          ? item.risks_or_opportunities
           : [],
         payable_work_validation: {
-          payable_work_done: parsed.items[0].payable_work_validation?.payable_work_done === true,
-          payable_work_evidence: parsed.items[0].payable_work_validation?.payable_work_evidence || "",
-          confidence: parsed.items[0].payable_work_validation?.confidence || "low",
+          payable_work_done: item.payable_work_validation?.payable_work_done === true,
+          payable_work_evidence: item.payable_work_validation?.payable_work_evidence || "",
+          confidence: item.payable_work_validation?.confidence || "low",
         },
       }
     ],
