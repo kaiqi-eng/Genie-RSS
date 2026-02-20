@@ -40,20 +40,6 @@ export function cleanTranscript(text) {
 }
 
 /**
- * Escape quotes inside JSON strings
- */
-function escapeJSONString(str) {
-  if (!str) return "";
-  return str
-    .replace(/\\/g, "\\\\")
-    .replace(/"/g, '\\"')
-    .replace(/\r?\n/g, "\\n")
-    .replace(/\t/g, "\\t")
-    .replace(/[\u0000-\u001F]+/g, " ")
-    .trim();
-}
-
-/**
  * Extract first JSON object/array from string
  */
 export function extractJSON(str) {
