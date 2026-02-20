@@ -29,7 +29,7 @@ function getLLM() {
  * Clean Slack/Otter transcript text for prompt
  * Removes raw line breaks and excessive whitespace
  */
-function cleanTranscript(text) {
+export function cleanTranscript(text) {
   if (!text) return "";
   return text
     .replace(/[\r\n]+/g, " ")  // convert newlines to spaces
@@ -54,7 +54,7 @@ function escapeJSONString(str) {
 /**
  * Extract first JSON object/array from string
  */
-function extractJSON(str) {
+export function extractJSON(str) {
   const match = str.match(/\{[\s\S]*\}|\[[\s\S]*\]/);
   if (!match) throw new Error("No JSON object found in LLM output");
   return JSON.parse(match[0]);
