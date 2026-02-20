@@ -80,13 +80,16 @@ export async function summarizeFeeds(feeds) {
     throw new Error("LLM returned invalid JSON");
   }
 
+  // Ensure parsed.items is an array, default to empty array if missing
+  const parsedItems = Array.isArray(parsed.items) ? parsed.items : [];
+
   // Merge original feed content with AI summaries
   const items = feeds.map((feed, index) => ({
     title: feed.title,
     source: feed.source || "unknown",
     published: feed.published || "",
     content: feed.content || "",
-    summary: parsed.items?.[index]?.summary || "No summary generated",
+    summary: parsedItems[index]?.summary || "No summary generated",
   }));
 
   return {
