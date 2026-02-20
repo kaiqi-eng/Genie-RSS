@@ -30,7 +30,7 @@ function getLLM() {
 /**
  * Build structured JSON-only prompt
  */
-function buildPrompt(feeds) {
+export function buildPrompt(feeds) {
   return `
 You are an intelligence analyst.
 
