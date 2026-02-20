@@ -4,15 +4,26 @@ import { createLogger } from "../utils/logger.js";
 
 const logger = createLogger('services:otterTranscript');
 
-if (!process.env.OPENAI_API_KEY) {
-  throw new Error("OPENAI_API_KEY is missing");
-}
+// Lazy-initialized LLM instance to avoid crash on module load
+let llm = null;
 
-const llm = new ChatOpenAI({
-  model: "gpt-3.5-turbo-0125",
-  temperature: 0,
-  apiKey: process.env.OPENAI_API_KEY,
-});
+/**
+ * Get or create the LLM instance (lazy initialization)
+ * Throws at runtime only when actually needed, not at module load
+ */
+function getLLM() {
+  if (!llm) {
+    if (!process.env.OPENAI_API_KEY) {
+      throw new Error("OPENAI_API_KEY is not configured");
+    }
+    llm = new ChatOpenAI({
+      model: "gpt-3.5-turbo-0125",
+      temperature: 0,
+      apiKey: process.env.OPENAI_API_KEY,
+    });
+  }
+  return llm;
+}
 
 /**
  * Clean Slack/Otter transcript text for prompt
@@ -109,7 +120,8 @@ export async function summarizeTranscript(feeds) {
 
   let response;
   try {
-    response = await llm.invoke([new HumanMessage(prompt)]);
+    const llmInstance = getLLM();
+    response = await llmInstance.invoke([new HumanMessage(prompt)]);
   } catch (err) {
     throw new Error("LLM request failed: " + err.message);
   }
