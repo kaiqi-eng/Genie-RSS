@@ -1,6 +1,8 @@
 import express from 'express';
 import cors from 'cors';
 import dotenv from 'dotenv';
+import swaggerUi from 'swagger-ui-express';
+import { swaggerSpec } from './config/swagger.js';
 import { apiKeyAuth } from './middleware/auth.js';
 import { rateLimitMiddleware } from './middleware/rateLimit.js';
 import { requestLoggerMiddleware } from './middleware/requestLogger.js';
@@ -40,6 +42,12 @@ app.use(express.urlencoded({ extended: true }));
 
 // Request logging (after body parsing so we can log request bodies)
 app.use(requestLoggerMiddleware);
+
+// Swagger documentation (no auth required)
+app.use('/api-docs', swaggerUi.serve, swaggerUi.setup(swaggerSpec));
+app.get('/api-docs.json', (req, res) => {
+  res.json(swaggerSpec);
+});
 
 // Protected Routes (require API key)
 // Rate limiting is applied first to block IPs with excessive failed auth attempts

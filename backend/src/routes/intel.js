@@ -93,18 +93,154 @@ async function processIntelUrls(req, res, endpoint, action) {
     }
 }
 
-// Add URL (parallel processing)
+/**
+ * @swagger
+ * /intel/addintelurl:
+ *   post:
+ *     summary: Add URLs to intelligence system
+ *     description: Forwards URLs to the webhook endpoint for adding to the intelligence tracking system.
+ *     tags: [Intelligence]
+ *     requestBody:
+ *       required: true
+ *       content:
+ *         application/json:
+ *           schema:
+ *             type: object
+ *             required:
+ *               - urls
+ *             properties:
+ *               urls:
+ *                 type: array
+ *                 minItems: 1
+ *                 items:
+ *                   type: string
+ *                   format: uri
+ *                 description: Array of URLs to add
+ *                 example: ["https://example.com/article"]
+ *     responses:
+ *       200:
+ *         description: URLs processed
+ *         content:
+ *           application/json:
+ *             schema:
+ *               type: object
+ *               properties:
+ *                 success:
+ *                   type: boolean
+ *                 results:
+ *                   type: array
+ *                   items:
+ *                     type: object
+ *                     properties:
+ *                       url:
+ *                         type: string
+ *                       success:
+ *                         type: boolean
+ *                       error:
+ *                         type: string
+ *       401:
+ *         description: Missing or invalid API key
+ *       500:
+ *         description: Server error
+ */
 router.post('/addintelurl', validateIntelUrls, (req, res) =>
     processIntelUrls(req, res, 'addintelurl', 'Add intel URLs')
 );
 
-// Delete URL (parallel processing)
+/**
+ * @swagger
+ * /intel/deleteintelurl:
+ *   post:
+ *     summary: Delete URLs from intelligence system
+ *     description: Forwards URLs to the webhook endpoint for removal from the intelligence tracking system.
+ *     tags: [Intelligence]
+ *     requestBody:
+ *       required: true
+ *       content:
+ *         application/json:
+ *           schema:
+ *             type: object
+ *             required:
+ *               - urls
+ *             properties:
+ *               urls:
+ *                 type: array
+ *                 minItems: 1
+ *                 items:
+ *                   type: string
+ *                   format: uri
+ *                 description: Array of URLs to delete
+ *                 example: ["https://example.com/article"]
+ *     responses:
+ *       200:
+ *         description: URLs processed
+ *         content:
+ *           application/json:
+ *             schema:
+ *               type: object
+ *               properties:
+ *                 success:
+ *                   type: boolean
+ *                 results:
+ *                   type: array
+ *                   items:
+ *                     type: object
+ *                     properties:
+ *                       url:
+ *                         type: string
+ *                       success:
+ *                         type: boolean
+ *                       error:
+ *                         type: string
+ *       401:
+ *         description: Missing or invalid API key
+ *       500:
+ *         description: Server error
+ */
 router.post('/deleteintelurl', validateIntelUrls, (req, res) =>
     processIntelUrls(req, res, 'deleteintelurl', 'Delete intel URLs')
 );
 
-
-// Get daily RSS feed
+/**
+ * @swagger
+ * /intel/getdailyintel:
+ *   post:
+ *     summary: Get daily intelligence RSS feed
+ *     description: Retrieves the daily intelligence RSS feed for the specified date.
+ *     tags: [Intelligence]
+ *     requestBody:
+ *       required: true
+ *       content:
+ *         application/json:
+ *           schema:
+ *             type: object
+ *             required:
+ *               - date
+ *             properties:
+ *               date:
+ *                 type: string
+ *                 pattern: '^\d{4}-\d{2}-\d{2}$'
+ *                 description: Date in YYYY-MM-DD format
+ *                 example: "2024-01-15"
+ *     responses:
+ *       200:
+ *         description: Daily intelligence retrieved
+ *         content:
+ *           application/json:
+ *             schema:
+ *               type: object
+ *               description: Response from webhook endpoint
+ *       400:
+ *         description: Invalid date format
+ *         content:
+ *           application/json:
+ *             schema:
+ *               $ref: '#/components/schemas/Error'
+ *       401:
+ *         description: Missing or invalid API key
+ *       500:
+ *         description: Server error
+ */
 router.post('/getdailyintel', validateDailyIntel, async (req, res) => {
     try {
         // Zod validation ensures date is in YYYY-MM-DD format

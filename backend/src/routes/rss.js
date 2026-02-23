@@ -10,6 +10,59 @@ import { validateRssFetch } from '../middleware/validator.js';
 const router = express.Router();
 const logger = createLogger('routes:rss');
 
+/**
+ * @swagger
+ * /rss/fetch:
+ *   post:
+ *     summary: Fetch or generate RSS feed for a URL
+ *     description: Discovers an existing RSS feed for the given URL, or scrapes the website and generates one if no feed is found.
+ *     tags: [RSS]
+ *     requestBody:
+ *       required: true
+ *       content:
+ *         application/json:
+ *           schema:
+ *             type: object
+ *             required:
+ *               - url
+ *             properties:
+ *               url:
+ *                 type: string
+ *                 format: uri
+ *                 description: The URL to fetch or generate RSS for
+ *                 example: https://example.com
+ *     responses:
+ *       200:
+ *         description: RSS feed retrieved successfully
+ *         content:
+ *           application/json:
+ *             schema:
+ *               type: object
+ *               properties:
+ *                 source:
+ *                   type: string
+ *                   enum: [discovered, generated]
+ *                   description: Whether the feed was discovered or generated
+ *                 feedUrl:
+ *                   type: string
+ *                   nullable: true
+ *                   description: URL of discovered feed (null if generated)
+ *                 feed:
+ *                   $ref: '#/components/schemas/Feed'
+ *                 rssXml:
+ *                   type: string
+ *                   description: Raw XML (only for generated feeds)
+ *       400:
+ *         description: Invalid URL or SSRF protection triggered
+ *         content:
+ *           application/json:
+ *             schema:
+ *               $ref: '#/components/schemas/Error'
+ *       401:
+ *         description: Missing or invalid API key
+ *       500:
+ *         description: Server error
+ */
 router.post('/fetch', validateRssFetch, async (req, res) => {
   try {
     const { url } = req.body;
