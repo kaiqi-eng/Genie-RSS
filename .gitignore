@@ -5,6 +5,7 @@ dist/
 build/
 .vite/
 coverage/
+test-results/
 
 # Logs
 *.log

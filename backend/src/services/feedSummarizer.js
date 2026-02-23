@@ -1,20 +1,36 @@
 import { ChatOpenAI } from "@langchain/openai";
 import { HumanMessage } from "@langchain/core/messages";
+import { timeouts } from "../config/index.js";
+import { createLogger } from "../utils/logger.js";
 
-if (!process.env.OPENAI_API_KEY) {
-  throw new Error("OPENAI_API_KEY is missing");
+const logger = createLogger('services:feedSummarizer');
+
+// Lazy-initialized LLM instance to avoid crash on module load
+let llm = null;
+
+/**
+ * Get or create the LLM instance (lazy initialization)
+ * Throws at runtime only when actually needed, not at module load
+ */
+function getLLM() {
+  if (!llm) {
+    if (!process.env.OPENAI_API_KEY) {
+      throw new Error("OPENAI_API_KEY is not configured");
+    }
+    llm = new ChatOpenAI({
+      model: "gpt-3.5-turbo-0125",
+      temperature: 0,
+      apiKey: process.env.OPENAI_API_KEY,
+      timeout: timeouts.llm,
+    });
+  }
+  return llm;
 }
-
-const llm = new ChatOpenAI({
-  model: "gpt-3.5-turbo-0125",
-  temperature: 0,
-  apiKey: process.env.OPENAI_API_KEY,
-});
 
 /**
  * Build structured JSON-only prompt
  */
-function buildPrompt(feeds) {
+export function buildPrompt(feeds) {
   return `
 You are an intelligence analyst.
 
@@ -55,18 +71,31 @@ export async function summarizeFeeds(feeds) {
     throw new Error("feeds must be a non-empty array");
   }
 
+  logger.info('Processing feed summarization', { feedCount: feeds.length });
+
   const prompt = buildPrompt(feeds);
 
-  const response = await llm.invoke([
-    new HumanMessage(prompt),
-  ]);
+  let response;
+  try {
+    const llmInstance = getLLM();
+    response = await llmInstance.invoke([
+      new HumanMessage(prompt),
+    ]);
+  } catch (err) {
+    logger.error('LLM request failed', { error: err });
+    throw new Error("LLM request failed: " + err.message);
+  }
 
   let parsed;
   try {
     parsed = JSON.parse(response.content);
   } catch (err) {
+    logger.error('Invalid JSON from LLM', { content: response.content, error: err });
     throw new Error("LLM returned invalid JSON");
   }
+
+  // Ensure parsed.items is an array, default to empty array if missing
+  const parsedItems = Array.isArray(parsed.items) ? parsed.items : [];
 
   // Merge original feed content with AI summaries
   const items = feeds.map((feed, index) => ({
@@ -74,8 +103,10 @@ export async function summarizeFeeds(feeds) {
     source: feed.source || "unknown",
     published: feed.published || "",
     content: feed.content || "",
-    summary: parsed.items?.[index]?.summary || "No summary generated",
+    summary: parsedItems[index]?.summary || "No summary generated",
   }));
+
+  logger.info('Feed summarization completed', { feedCount: feeds.length, itemCount: items.length });
 
   return {
     total_feeds: feeds.length,

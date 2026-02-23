@@ -59,7 +59,10 @@ export const timeouts = {
   feedProcessLong: parseInt(process.env.FEED_PROCESS_LONG_TIMEOUT, 30000),
 
   // ScrapingBee
-  scrapingBee: parseInt(process.env.SCRAPINGBEE_TIMEOUT, 30000)
+  scrapingBee: parseInt(process.env.SCRAPINGBEE_TIMEOUT, 30000),
+
+  // LLM API calls (OpenAI)
+  llm: parseInt(process.env.LLM_TIMEOUT, 60000)
 };
 
 /**

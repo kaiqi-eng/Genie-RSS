@@ -11,8 +11,58 @@ const logger = createLogger('routes:transcripts');
 router.use(express.json({ limit: bodyLimits.transcript }));
 
 /**
- * POST /api/transcript/summarize
- * Summarize multiple transcripts into one combined summary
+ * @swagger
+ * /transcript/summarize:
+ *   post:
+ *     summary: Summarize transcripts using AI
+ *     description: Combines and summarizes multiple transcripts into a single AI-generated summary.
+ *     tags: [Transcripts]
+ *     requestBody:
+ *       required: true
+ *       content:
+ *         application/json:
+ *           schema:
+ *             type: object
+ *             required:
+ *               - transcripts
+ *             properties:
+ *               transcripts:
+ *                 oneOf:
+ *                   - type: array
+ *                     minItems: 1
+ *                     items:
+ *                       oneOf:
+ *                         - type: string
+ *                         - type: object
+ *                           properties:
+ *                             content:
+ *                               type: string
+ *                             title:
+ *                               type: string
+ *                   - type: string
+ *                     description: JSON string that parses to an array (legacy support)
+ *                 description: Array of transcripts to summarize
+ *     responses:
+ *       200:
+ *         description: Transcripts summarized successfully
+ *         content:
+ *           application/json:
+ *             schema:
+ *               type: object
+ *               properties:
+ *                 summary:
+ *                   type: string
+ *                   description: AI-generated summary of transcripts
+ *       400:
+ *         description: Validation error
+ *         content:
+ *           application/json:
+ *             schema:
+ *               $ref: '#/components/schemas/Error'
+ *       401:
+ *         description: Missing or invalid API key
+ *       500:
+ *         description: Server error
  */
 router.post("/summarize", validateTranscriptSummarize, async (req, res) => {
   try {

@@ -71,6 +71,7 @@ Genie-RSS/
 | `NEWSLETTER_EMAIL` | No | Gmail for newsletter extraction |
 | `NEWSLETTER_PASSWORD` | No | Gmail app password |
 | `PORT` | No | Server port (default: 3001) |
+| `LLM_TIMEOUT` | No | LLM API timeout in ms (default: 60000) |
 
 ### Running the Application
 
@@ -87,6 +88,48 @@ Genie-RSS/
    npm run dev
    ```
    The frontend will run on http://localhost:3000
+
+### API Documentation
+
+Swagger documentation is available at:
+- **Swagger UI**: http://localhost:3001/api-docs
+- **OpenAPI JSON**: http://localhost:3001/api-docs.json
+
+### Mock Webhook Server (for local testing)
+
+The Intel API endpoints (`/api/intel/*`) forward requests to an external webhook. For local testing, use the included mock server:
+
+1. **Set webhook URL in `.env`:**
+   ```bash
+   WEBHOOK_URL=http://localhost:4000
+   ```
+
+2. **Start the mock webhook server:**
+   ```bash
+   cd backend
+   npm run webhook
+   ```
+   The mock server runs on http://localhost:4000
+
+3. **Available mock endpoints:**
+   | Endpoint | Description |
+   |----------|-------------|
+   | `POST /addintelurl` | Add URL to tracking (in-memory) |
+   | `POST /deleteintelurl` | Remove URL from tracking |
+   | `POST /getdailyintel` | Get tracked URLs as RSS items |
+   | `GET /status` | View all tracked URLs |
+
+4. **Test the Intel API:**
+   ```bash
+   # Add URLs
+   curl -X POST 'http://localhost:3001/api/intel/addintelurl' \
+     -H 'Content-Type: application/json' \
+     -H 'X-API-Key: your_secure_api_key_here' \
+     -d '{"urls": ["https://example.com/article"]}'
+
+   # Check mock server status
+   curl http://localhost:4000/status
+   ```
 
 ### Usage
 
