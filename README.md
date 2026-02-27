@@ -53,6 +53,26 @@ Genie-RSS/
    npm install
    ```
 
+3. **Configure environment variables:**
+   ```bash
+   cd backend
+   cp .env.example .env
+   # Edit .env with your API keys
+   ```
+
+### Environment Variables
+
+| Variable | Required | Description |
+|----------|----------|-------------|
+| `API_KEY` | Yes | Your API key for authenticating requests |
+| `OPENAI_API_KEY` | Yes | OpenAI API key for AI summarization |
+| `SCRAPINGBEE_API_KEY` | Yes | ScrapingBee API key for feed processing |
+| `WEBHOOK_URL` | No | Webhook URL for intelligence delivery |
+| `NEWSLETTER_EMAIL` | No | Gmail for newsletter extraction |
+| `NEWSLETTER_PASSWORD` | No | Gmail app password |
+| `PORT` | No | Server port (default: 3001) |
+| `LLM_TIMEOUT` | No | LLM API timeout in ms (default: 60000) |
+
 ### Running the Application
 
 1. **Start the backend server:**
@@ -68,6 +88,48 @@ Genie-RSS/
    npm run dev
    ```
    The frontend will run on http://localhost:3000
+
+### API Documentation
+
+Swagger documentation is available at:
+- **Swagger UI**: http://localhost:3001/api-docs
+- **OpenAPI JSON**: http://localhost:3001/api-docs.json
+
+### Mock Webhook Server (for local testing)
+
+The Intel API endpoints (`/api/intel/*`) forward requests to an external webhook. For local testing, use the included mock server:
+
+1. **Set webhook URL in `.env`:**
+   ```bash
+   WEBHOOK_URL=http://localhost:4000
+   ```
+
+2. **Start the mock webhook server:**
+   ```bash
+   cd backend
+   npm run webhook
+   ```
+   The mock server runs on http://localhost:4000
+
+3. **Available mock endpoints:**
+   | Endpoint | Description |
+   |----------|-------------|
+   | `POST /addintelurl` | Add URL to tracking (in-memory) |
+   | `POST /deleteintelurl` | Remove URL from tracking |
+   | `POST /getdailyintel` | Get tracked URLs as RSS items |
+   | `GET /status` | View all tracked URLs |
+
+4. **Test the Intel API:**
+   ```bash
+   # Add URLs
+   curl -X POST 'http://localhost:3001/api/intel/addintelurl' \
+     -H 'Content-Type: application/json' \
+     -H 'X-API-Key: your_secure_api_key_here' \
+     -d '{"urls": ["https://example.com/article"]}'
+
+   # Check mock server status
+   curl http://localhost:4000/status
+   ```
 
 ### Usage
 
@@ -98,14 +160,16 @@ Fetches or generates an RSS feed for a given URL.
 **Example (curl):**
 ```bash
 # direct to backend
-curl -X POST "http://localhost:3001/api/rss/fetch" ^
-  -H "Content-Type: application/json" ^
-  -d "{\"url\":\"https://example.com\"}"
+curl -X POST "http://localhost:3001/api/rss/fetch" \
+  -H "Content-Type: application/json" \
+  -H "X-API-Key: your-api-key-here" \
+  -d '{"url":"https://example.com"}'
 
 # via Vite proxy (when frontend dev server is running)
-curl -X POST "http://localhost:3000/api/rss/fetch" ^
-  -H "Content-Type: application/json" ^
-  -d "{\"url\":\"https://example.com\"}"
+curl -X POST "http://localhost:3000/api/rss/fetch" \
+  -H "Content-Type: application/json" \
+  -H "X-API-Key: your-api-key-here" \
+  -d '{"url":"https://example.com"}'
 ```
 
 **Example (browser fetch):**
@@ -113,7 +177,10 @@ curl -X POST "http://localhost:3000/api/rss/fetch" ^
 async function getFeed(url) {
   const res = await fetch("/api/rss/fetch", {
     method: "POST",
-    headers: { "Content-Type": "application/json" },
+    headers: {
+      "Content-Type": "application/json",
+      "X-API-Key": "your-api-key-here"
+    },
     body: JSON.stringify({ url }),
   });
 

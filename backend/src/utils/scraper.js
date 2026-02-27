@@ -1,12 +1,21 @@
 import axios from 'axios';
 import * as cheerio from 'cheerio';
+import { validateUrl } from './urlValidator.js';
+import { createLogger } from './logger.js';
+import { timeouts, limits } from '../config/index.js';
+
+const logger = createLogger('utils:scraper');
 
 /**
  * Scrape a website for content to generate an RSS feed
  * @param {string} url - The website URL to scrape
  * @returns {object} - Scraped website data
+ * @throws {UrlValidationError} - If URL is invalid or blocked (SSRF protection)
  */
 export async function scrapeWebsite(url) {
+  // Validate URL for SSRF protection
+  validateUrl(url);
+
   try {
     const response = await axios.get(url, {
       headers: {
@@ -14,7 +23,7 @@ export async function scrapeWebsite(url) {
         'Accept': 'text/html,application/xhtml+xml,application/xml;q=0.9,*/*;q=0.8',
         'Accept-Language': 'en-US,en;q=0.5'
       },
-      timeout: 15000
+      timeout: timeouts.scraper
     });
 
     const $ = cheerio.load(response.data);
@@ -49,7 +58,7 @@ export async function scrapeWebsite(url) {
       scrapedAt: new Date().toISOString()
     };
   } catch (error) {
-    console.error('Error scraping website:', error.message);
+    logger.error('Error scraping website', { url, error });
     throw new Error(`Failed to scrape website: ${error.message}`);
   }
 }
@@ -121,8 +130,8 @@ function extractContentItems($, baseUrl) {
     });
   }
 
-  // Limit to 20 items
-  return items.slice(0, 20);
+  // Limit items based on config
+  return items.slice(0, limits.maxScrapedItems);
 }
 
 /**

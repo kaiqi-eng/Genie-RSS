@@ -5,6 +5,7 @@ dist/
 build/
 .vite/
 coverage/
+test-results/
 
 # Logs
 *.log
@@ -16,6 +17,7 @@ pnpm-debug.log*
 # Env / secrets
 .env
 .env.*
+!.env.example
 
 # OS / editor
 .DS_Store
