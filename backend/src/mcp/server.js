@@ -5,7 +5,7 @@ import { summarizeFeeds } from "../services/feedSummarizer.js";
 const router = express.Router();
 
 router.post("/", async (req, res) => {
-  const { jsonrpc, id, method, params } = req.body;
+  const { jsonrpc, id, method, params = {} } = req.body || {};
 
   try {
     if (method === "tools/list") {
@@ -17,10 +17,7 @@ router.post("/", async (req, res) => {
             {
               name: "health_check",
               description: "Check if MCP server is running",
-              inputSchema: {
-                type: "object",
-                properties: {}
-              }
+              inputSchema: { type: "object", properties: {} }
             },
             {
               name: "fetch_rss_feed",
@@ -50,7 +47,10 @@ router.post("/", async (req, res) => {
     }
 
     if (method === "tools/call") {
-      if (params.name === "health_check") {
+      const name = params.name;
+      const args = params.arguments || {};
+
+      if (name === "health_check") {
         return res.json({
           jsonrpc: "2.0",
           id,
@@ -61,31 +61,28 @@ router.post("/", async (req, res) => {
         });
       }
 
-      if (params.name === "fetch_rss_feed") {
-  const { url } = params.arguments || {};
+      if (name === "fetch_rss_feed") {
+        const { url } = args;
+        if (!url) {
+          return res.json({
+            jsonrpc: "2.0",
+            id,
+            error: { code: -32602, message: "Missing required parameter: url" }
+          });
+        }
 
-  if (!url) {
-    return res.json({
-      jsonrpc: "2.0",
-      id,
-      error: {
-        code: -32602,
-        message: "Missing required parameter: url"
+        const result = await processFeeds({ url });
+
+        return res.json({
+          jsonrpc: "2.0",
+          id,
+          result
+        });
       }
-    });
-  }
 
-  const result = await processFeeds({ url }); // ✅ FIX HERE
-
-  return res.json({
-    jsonrpc: "2.0",
-    id,
-    result
-  });
-}
-
-      if (params.name === "feed_summary") {
-        const result = await summarizeFeeds(params.feeds);
+      if (name === "feed_summary") {
+        const { feeds } = args;
+        const result = await summarizeFeeds(feeds);
 
         return res.json({
           jsonrpc: "2.0",
@@ -98,20 +95,14 @@ router.post("/", async (req, res) => {
     return res.json({
       jsonrpc: "2.0",
       id,
-      error: {
-        code: -32601,
-        message: "Method not found"
-      }
+      error: { code: -32601, message: "Method not found" }
     });
 
   } catch (error) {
     return res.json({
       jsonrpc: "2.0",
       id,
-      error: {
-        code: -32000,
-        message: error.message
-      }
+      error: { code: -32000, message: error.message }
     });
   }
 });
