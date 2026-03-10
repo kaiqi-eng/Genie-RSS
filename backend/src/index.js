@@ -12,7 +12,6 @@ import summarizeRoutes from "./routes/summarize.js";
 import transcriptRoutes from "./routes/transcripts.js";
 import intelRoutes from './routes/intel.js';
 import { createLogger } from './utils/logger.js';
-import mcpRoutes from "./mcp/server.js";
 
 dotenv.config();
 
@@ -20,7 +19,6 @@ const logger = createLogger('server');
 
 const app = express();
 const PORT = process.env.PORT || 3001;
-
 
 // Process-level error handlers to prevent crashes
 process.on('unhandledRejection', (reason, promise) => {
@@ -44,6 +42,20 @@ app.use(express.urlencoded({ extended: true }));
 
 // Request logging (after body parsing so we can log request bodies)
 app.use(requestLoggerMiddleware);
+
+// Swagger documentation (no auth required)
+app.use('/api-docs', swaggerUi.serve, swaggerUi.setup(swaggerSpec));
+app.get('/api-docs.json', (req, res) => {
+  res.json(swaggerSpec);
+});
+
+// Protected Routes (require API key)
+// Rate limiting is applied first to block IPs with excessive failed auth attempts
+app.use('/api/rss', rateLimitMiddleware, apiKeyAuth, rssRoutes);
+app.use('/api/rss/feed', rateLimitMiddleware, apiKeyAuth, thirdEyeRoutes);
+app.use("/api/summarize", rateLimitMiddleware, apiKeyAuth, summarizeRoutes);
+app.use("/api/transcript", rateLimitMiddleware, apiKeyAuth, transcriptRoutes);
+app.use('/api/intel', rateLimitMiddleware, apiKeyAuth, intelRoutes);
 
 // Swagger documentation (no auth required)
 app.use('/api-docs', swaggerUi.serve, swaggerUi.setup(swaggerSpec));
