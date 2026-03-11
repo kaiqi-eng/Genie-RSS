@@ -23,3 +23,7 @@ pnpm-debug.log*
 .DS_Store
 Thumbs.db
 .idea/
+
+#keys
+cert.pem
+key.pem

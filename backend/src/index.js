@@ -57,7 +57,20 @@ app.use("/api/summarize", rateLimitMiddleware, apiKeyAuth, summarizeRoutes);
 app.use("/api/transcript", rateLimitMiddleware, apiKeyAuth, transcriptRoutes);
 app.use('/api/intel', rateLimitMiddleware, apiKeyAuth, intelRoutes);
 
+// Swagger documentation (no auth required)
+app.use('/api-docs', swaggerUi.serve, swaggerUi.setup(swaggerSpec));
+app.get('/api-docs.json', (req, res) => {
+  res.json(swaggerSpec);
+});
 
+// Protected Routes (require API key)
+// Rate limiting is applied first to block IPs with excessive failed auth attempts
+app.use('/api/rss', rateLimitMiddleware, apiKeyAuth, rssRoutes);
+app.use('/api/rss/feed', rateLimitMiddleware, apiKeyAuth, thirdEyeRoutes);
+app.use("/api/summarize", rateLimitMiddleware, apiKeyAuth, summarizeRoutes);
+app.use("/api/transcript", rateLimitMiddleware, apiKeyAuth, transcriptRoutes);
+app.use('/api/intel', rateLimitMiddleware, apiKeyAuth, intelRoutes);
+app.use("/mcp", mcpRoutes);
 // Health check
 app.get('/health', (req, res) => {
   res.json({ status: 'ok' });

@@ -67,18 +67,40 @@ export const parseRSS = async (xml, source = "unknown", tier = "direct") => {
 
     for (const el of list.slice(0, 25)) {
       const title = el.title?._ || el.title || "";
-      const link = el.link?.href || el.link || "";
-      const content =
-        el.description || el.summary || el.content || "";
+
+      // RSS: el.link (string)
+      // YouTube Atom: array or object with rel=alternate
+      let link = "";
+      if (Array.isArray(el.link)) {
+        const alternate = el.link.find((l) => l.rel === "alternate");
+        link = alternate?.href || el.link[0]?.href || "";
+      } else {
+        link = el.link?.href || el.link || "";
+      }
+
       const published =
-        el.pubDate || el.published || el.updated || "";
+        el.pubDate ||
+        el.published ||
+        el.updated ||
+        "";
+
+      // YouTube media support (optional, safe fallback)
+      const media =
+        el["media:group"] || {};
+
+      const description =
+        media["media:description"] ||
+        el.description ||
+        el.summary ||
+        el.content ||
+        "";
 
       if (title && link) {
         items.push({
           id: hashId(link, published),
           title: title.slice(0, 200),
           url: link,
-          content: String(content).slice(0, 4000),
+          content: String(description).slice(0, 4000),
           published,
           source,
           tier,
@@ -88,9 +110,9 @@ export const parseRSS = async (xml, source = "unknown", tier = "direct") => {
   } catch {
     return [];
   }
+
   return items;
 };
-
 // ---------------- FEED DISCOVERY ----------------
 
 const discoverFeedUrls = (html, baseUrl) => {
