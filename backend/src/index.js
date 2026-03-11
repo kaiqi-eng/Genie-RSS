@@ -12,6 +12,7 @@ import summarizeRoutes from "./routes/summarize.js";
 import transcriptRoutes from "./routes/transcripts.js";
 import intelRoutes from './routes/intel.js';
 import { createLogger } from './utils/logger.js';
+import mcpRoutes from "./mcp/server.js";
 
 dotenv.config();
 
