@@ -12,9 +12,8 @@ import thirdEyeRoutes from './routes/feed.js';
 import summarizeRoutes from "./routes/summarize.js";
 import transcriptRoutes from "./routes/transcripts.js";
 import intelRoutes from './routes/intel.js';
-import { createLogger } from './utils/logger.js';
 import mcpRoutes from "./mcp/server.js"; // MCP server
-// Removed unused auth/audit imports in main index.js
+import { createLogger } from './utils/logger.js';
 
 dotenv.config();
 
@@ -32,7 +31,6 @@ process.on('unhandledRejection', (reason) => {
 
 process.on('uncaughtException', (error) => {
   logger.error('Uncaught exception', { error });
-  // Exit after logging (could also implement graceful shutdown)
   process.exit(1);
 });
 
@@ -46,7 +44,7 @@ app.use(requestLoggerMiddleware); // logs requests with IDs
 app.use('/api-docs', swaggerUi.serve, swaggerUi.setup(swaggerSpec));
 app.get('/api-docs.json', (req, res) => res.json(swaggerSpec));
 
-// Health check (before protected routes)
+// Health check
 app.get('/health', (req, res) => res.json({ status: 'ok' }));
 
 // Protected API routes with rate limiting and API key auth
@@ -67,7 +65,7 @@ app.use((req, res) => {
   });
 });
 
-// Global error handler (last middleware)
+// Global error handler
 app.use((err, req, res, next) => {
   const requestId = req.requestId || 'N/A';
   logger.error('Express error', {
