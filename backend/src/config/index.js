@@ -1,11 +1,6 @@
 import dotenv from "dotenv";
 dotenv.config();
 
-/**
- * Centralized configuration for Genie RSS Backend
- * All hardcoded values should be defined here for easy management
- */
-
 // Helper to parse integer with fallback
 const parseInteger = (value, fallback) => {
   const parsed = Number.parseInt(value, 10);

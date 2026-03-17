@@ -1,394 +1,185 @@
-// server/routes/mcp.js
+/**
+ * MCP Router
+ * Handles JSON-RPC for tools
+ */
 import express from "express";
-import rateLimit from "express-rate-limit";
 import { v4 as uuidv4 } from "uuid";
-
+import { verifyBearerToken } from "../services/auth.js";
+import { getTenantContext } from "../services/context.js";
+import { safeLogAudit } from "../services/audit.js";
 import { processFeeds } from "../services/feedprocess.js";
 import { summarizeFeeds } from "../services/feedSummarizer.js";
-import { verifyBearerToken, getTenantContext } from "../services/auth.js";
-import { logAudit } from "../services/audit.js";
 
 const router = express.Router();
 
-// -------------------------
-// RATE LIMITER
-// -------------------------
-const limiter = rateLimit({
-  windowMs: 60 * 1000, // 1 minute
-  max: 60,
-  standardHeaders: true,
-  legacyHeaders: false,
-  keyGenerator: (req) => {
-    const auth = req.headers["authorization"];
-    if (typeof auth === "string" && auth.startsWith("Bearer ")) {
-      return auth.slice(7, 25); // partial token fingerprint only
-    }
-    return req.ip;
-  },
-});
-
-router.use(limiter);
-
-// -------------------------
-// SAFE AUDIT WRAPPER
-// Prevent audit failures from breaking auth flow
-// -------------------------
-function safeLogAudit(tenantId, action, params, auditId, status, error = null) {
-  try {
-    logAudit(tenantId, action, params, auditId, status, error);
-  } catch (e) {
-    console.error("AUDIT LOG ERROR:", e);
-  }
-}
-
-// -------------------------
-// AUTH MIDDLEWARE
-// Compatible with auth.js returning:
-// { ok: true, user: { tenantId, email, id?, role?, permissions? } }
-// -------------------------
+/**
+ * Auth middleware
+ */
 router.use(async (req, res, next) => {
   const auditId = uuidv4();
-
   try {
-    const authHeader = req.headers["authorization"];
+    const authHeader = req.headers.authorization;
 
     if (!authHeader || !authHeader.startsWith("Bearer ")) {
-      safeLogAudit(null, "auth", {}, auditId, "fail", "Missing Bearer token");
-
+      safeLogAudit(null, "auth", {}, auditId, "fail", "Missing Authorization");
       return res.status(401).json({
         jsonrpc: "2.0",
         id: null,
-        error: {
-          code: -32001,
-          message: "Unauthorized: Bearer token required",
-        },
+        error: { code: -32001, message: "Unauthorized: Missing or invalid Authorization header" },
       });
     }
 
-    // IMPORTANT: pass full Authorization header
     const authResult = await verifyBearerToken(authHeader);
-
     if (!authResult?.ok || !authResult?.user?.tenantId) {
-      safeLogAudit(
-        null,
-        "auth",
-        {},
-        auditId,
-        "fail",
-        authResult?.error || "Invalid token"
-      );
-
+      safeLogAudit(null, "auth", {}, auditId, "fail", authResult?.error || "Invalid token");
       return res.status(401).json({
         jsonrpc: "2.0",
         id: null,
-        error: {
-          code: -32001,
-          message: `Unauthorized: ${authResult?.error || "Invalid token"}`,
-        },
+        error: { code: -32001, message: `Unauthorized: ${authResult?.error || "Invalid token"}` },
       });
     }
 
     req.tenant = authResult.user;
-
-    // This now works whether getTenantContext accepts object or string
     req.context = getTenantContext(authResult.user);
-
-    console.log("AUTH SUCCESS:", {
-      tenantId: req.context.tenantId,
-      userId: req.context.userId ?? null,
-      email: req.tenant.email ?? null,
-    });
-
     next();
   } catch (err) {
-    console.error("AUTH MIDDLEWARE ERROR:", err);
-
-    safeLogAudit(null, "auth", {}, auditId, "fail", err.message);
-
-    return res.status(500).json({
+    safeLogAudit(null, "auth", {}, auditId, "fail", err.message || "Unknown auth error");
+    return res.status(401).json({
       jsonrpc: "2.0",
       id: null,
-      error: {
-        code: -32000,
-        message: `Internal auth error: ${err.message}`,
-      },
+      error: { code: -32001, message: `Unauthorized: ${err.message || "Unknown auth error"}` },
     });
   }
 });
 
-// -------------------------
-// SSE STREAM (Protected)
-// NOTE: currently just confirms connection
-// -------------------------
-router.get("/stream", (req, res) => {
-  try {
-    res.setHeader("Content-Type", "text/event-stream");
-    res.setHeader("Cache-Control", "no-cache");
-    res.setHeader("Connection", "keep-alive");
-    res.flushHeaders?.();
-
-    res.write(`event: connected\n`);
-    res.write(
-      `data: ${JSON.stringify({
-        tenantId: req.context.tenantId,
-        message: "SSE connected",
-      })}\n\n`
-    );
-
-    req.on("close", () => {
-      res.end();
-    });
-  } catch (err) {
-    console.error("SSE ERROR:", err);
-    return res.status(500).end();
-  }
+/**
+ * Health check
+ */
+router.get("/health", (req, res) => {
+  return res.status(200).json({
+    ok: true,
+    tenantId: req.context?.tenantId || null,
+    message: "MCP route healthy",
+  });
 });
 
-// -------------------------
-// JSON-RPC POST ENDPOINT
-// -------------------------
+/**
+ * Main JSON-RPC endpoint
+ */
 router.post("/", async (req, res) => {
-  const { jsonrpc, id, method, params = {} } = req.body || {};
   const auditId = uuidv4();
-  let status = "success";
-  let error = null;
-
   try {
-    // -------------------------
-    // Validate JSON-RPC request
-    // -------------------------
-    if (jsonrpc !== "2.0" || typeof method !== "string") {
-      safeLogAudit(
-        req.tenant?.tenantId || null,
-        "invalid_request",
-        req.body,
-        auditId,
-        "fail",
-        "Invalid JSON-RPC request"
-      );
+    const body = req.body || {};
+    const { jsonrpc = "2.0", id = null, method, params = {} } = body;
 
+    if (!method) {
+      safeLogAudit(req.context?.tenantId || null, "unknown", params, auditId, "fail", "Missing method");
       return res.status(400).json({
-        jsonrpc: "2.0",
-        id: id ?? null,
-        error: {
-          code: -32600,
-          message: "Invalid Request",
-        },
-      });
-    }
-
-    // -------------------------
-    // MCP initialize
-    // -------------------------
-    if (method === "initialize") {
-      return res.json({
-        jsonrpc: "2.0",
+        jsonrpc,
         id,
-        result: {
-          server_info: {
-            name: "MCP Express Server",
-            version: "1.0.0",
-            features: ["tools", "resources", "prompts", "streaming"],
-          },
-          tenant: {
-            tenantId: req.context.tenantId,
-          },
-        },
+        error: { code: -32600, message: "Invalid Request: Missing method" },
       });
     }
 
-    // -------------------------
-    // List tools
-    // -------------------------
+    // ---------------- TOOLS LIST ----------------
     if (method === "tools/list") {
-      safeLogAudit(req.tenant.tenantId, method, params, auditId, status);
-
-      return res.json({
-        jsonrpc: "2.0",
+      safeLogAudit(req.context?.tenantId || null, method, params, auditId, "success", null);
+      return res.status(200).json({
+        jsonrpc,
         id,
         result: {
           tools: [
             {
-              name: "health_check",
-              description: "Check if MCP server is running",
-              inputSchema: {
-                type: "object",
-                properties: {},
-              },
-            },
-            {
               name: "fetch_rss_feed",
-              description: "Fetch RSS feed and process it",
+              description: "Fetch and process one or more RSS feeds",
               inputSchema: {
                 type: "object",
                 properties: {
-                  url: { type: "string", format: "uri" },
+                  url: { type: "string", description: "Single RSS or site URL" },
+                  feeds: {
+                    type: "array",
+                    items: { type: "string" },
+                    description: "Array of RSS or site URLs"
+                  }
                 },
-                required: ["url"],
-              },
+                anyOf: [{ required: ["url"] }, { required: ["feeds"] }]
+              }
             },
             {
               name: "feed_summary",
-              description: "Summarize feed items using AI",
+              description: "Summarize feed items",
               inputSchema: {
                 type: "object",
                 properties: {
-                  feeds: { type: "array" },
+                  feeds: {
+                    type: "array",
+                    items: {
+                      type: "object",
+                      properties: {
+                        title: { type: "string" },
+                        link: { type: "string" },
+                        content: { type: "string" },
+                        pubDate: { type: "string" },
+                        source: { type: "string" }
+                      }
+                    }
+                  }
                 },
-                required: ["feeds"],
-              },
-            },
-          ],
-        },
+                required: ["feeds"]
+              }
+            }
+          ]
+        }
       });
     }
 
-    // -------------------------
-    // Tool execution
-    // -------------------------
+    // ---------------- TOOLS CALL ----------------
     if (method === "tools/call") {
-      const { name, arguments: args = {} } = params;
-
-      if (!name || typeof name !== "string") {
-        safeLogAudit(
-          req.tenant.tenantId,
-          method,
-          params,
-          auditId,
-          "fail",
-          "Tool name is required"
-        );
-
-        return res.status(400).json({
-          jsonrpc: "2.0",
-          id,
-          error: {
-            code: -32602,
-            message: "Invalid params: tool name is required",
-          },
-        });
-      }
-
+      // Use `args` instead of `arguments` to avoid reserved word issues
+      const { name, args = {} } = params;
       let result;
 
-      // health_check
-      if (name === "health_check") {
-        result = {
-          status: "ok",
-          server: "MCP Express Server",
-          tenantId: req.context.tenantId,
-          userId: req.context.userId ?? null,
-          timestamp: new Date().toISOString(),
-        };
-      }
-
-      // fetch_rss_feed
-      else if (name === "fetch_rss_feed") {
-        if (!args.url || typeof args.url !== "string") {
-          safeLogAudit(
-            req.tenant.tenantId,
-            method,
-            params,
-            auditId,
-            "fail",
-            "Invalid url"
-          );
-
+      if (name === "fetch_rss_feed") {
+        if (args.feeds && Array.isArray(args.feeds) && args.feeds.length > 0) {
+          result = await processFeeds({ feeds: args.feeds });
+        } else if (args.url && typeof args.url === "string") {
+          result = await processFeeds({ url: args.url });
+        } else {
           return res.status(400).json({
-            jsonrpc: "2.0",
+            jsonrpc,
             id,
-            error: {
-              code: -32602,
-              message: "Invalid params: url is required",
-            },
+            error: { code: -32602, message: "You must provide 'url' or 'feeds'" }
           });
         }
-
-        result = await processFeeds({ url: args.url }, req.context);
-      }
-
-      // feed_summary
-      else if (name === "feed_summary") {
-        if (!Array.isArray(args.feeds)) {
-          safeLogAudit(
-            req.tenant.tenantId,
-            method,
-            params,
-            auditId,
-            "fail",
-            "Invalid feeds"
-          );
-
-          return res.status(400).json({
-            jsonrpc: "2.0",
-            id,
-            error: {
-              code: -32602,
-              message: "Invalid params: feeds must be an array",
-            },
-          });
-        }
-
-        result = await summarizeFeeds(args.feeds, req.context);
-      }
-
-      // unknown tool
-      else {
-        status = "fail";
-        error = "Unknown tool";
-
-        safeLogAudit(req.tenant.tenantId, method, params, auditId, status, error);
-
+      } else if (name === "feed_summary") {
+        result = await summarizeFeeds(args.feeds);
+      } else {
+        safeLogAudit(req.context?.tenantId || null, method, params, auditId, "fail", "Unknown tool");
         return res.status(400).json({
-          jsonrpc: "2.0",
+          jsonrpc,
           id,
-          error: {
-            code: -32601,
-            message: error,
-          },
+          error: { code: -32601, message: "Unknown tool" }
         });
       }
 
-      safeLogAudit(req.tenant.tenantId, method, params, auditId, status);
-
-      return res.json({
-        jsonrpc: "2.0",
-        id,
-        result,
-      });
+      safeLogAudit(req.context?.tenantId || null, method, params, auditId, "success", null);
+      return res.status(200).json({ jsonrpc, id, result });
     }
 
-    // -------------------------
-    // Unknown method
-    // -------------------------
-    status = "fail";
-    error = "Method not found";
-
-    safeLogAudit(req.tenant.tenantId, method, params, auditId, status, error);
-
+    // ---------------- METHOD NOT FOUND ----------------
+    safeLogAudit(req.context?.tenantId || null, method, params, auditId, "fail", "Method not found");
     return res.status(404).json({
-      jsonrpc: "2.0",
+      jsonrpc,
       id,
-      error: {
-        code: -32601,
-        message: error,
-      },
+      error: { code: -32601, message: `Method not found: ${method}` }
     });
-  } catch (err) {
-    console.error("MCP ROUTE ERROR:", err);
 
-    status = "fail";
-    error = err.message;
-
-    safeLogAudit(req.tenant?.tenantId || null, method, params, auditId, status, error);
-
+  } catch (error) {
+    safeLogAudit(req.context?.tenantId || null, req.body?.method || "unknown", req.body?.params || {}, auditId, "fail", error.message || "Unhandled MCP error");
     return res.status(500).json({
       jsonrpc: "2.0",
-      id: id ?? null,
-      error: {
-        code: -32000,
-        message: `Internal server error: ${err.message}`,
-      },
+      id: req.body?.id ?? null,
+      error: { code: -32000, message: error?.message || "Internal server error" }
     });
   }
 });

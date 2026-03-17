@@ -1,19 +1,32 @@
-import fs from "fs";
-import path from "path";
+/**
+ * Basic audit logger
+ * Replace with DB/file logger if needed.
+ */
+export function logAudit(tenantId, method, params, auditId, status, error = null) {
+  try {
+    const entry = {
+      timestamp: new Date().toISOString(),
+      tenantId: tenantId || null,
+      method: method || "unknown",
+      params: params || {},
+      auditId,
+      status,
+      error: error || null,
+    };
 
-const AUDIT_LOG_PATH = path.resolve(process.cwd(), "audit.log");
+    console.log(JSON.stringify(entry));
+  } catch (logError) {
+    console.error("Audit logging failed:", logError?.message || logError);
+  }
+}
 
-// Stub for audit logging
-export function logAudit(tenantId, method, params, auditId, status = "success", error = null) {
-  const entry = {
-    timestamp: new Date().toISOString(),
-    tenantId,
-    method,
-    params,
-    auditId,
-    status,
-    error
-  };
-  const line = JSON.stringify(entry) + "\n";
-  fs.appendFileSync(AUDIT_LOG_PATH, line, { encoding: "utf8" });
+/**
+ * Optional safe alias if some files use safeLogAudit instead of logAudit
+ */
+export function safeLogAudit(tenantId, method, params, auditId, status, error = null) {
+  try {
+    logAudit(tenantId, method, params, auditId, status, error);
+  } catch {
+    // intentionally ignore
+  }
 }

@@ -1,91 +1,52 @@
-// server/services/auth.js
 import jwt from "jsonwebtoken";
-import { credentials } from "../config/index.js";
 
-const JWT_SECRET = credentials.JWT_SECRET;
-
-if (!JWT_SECRET) {
-  throw new Error("JWT_SECRET is missing. Check your .env and config/index.js");
-}
-
-function extractToken(authHeaderOrToken) {
-  if (!authHeaderOrToken || typeof authHeaderOrToken !== "string") {
-    return null;
-  }
-
-  if (authHeaderOrToken.startsWith("Bearer ")) {
-    return authHeaderOrToken.slice(7).trim();
-  }
-
-  return authHeaderOrToken.trim();
-}
-
+/**
+ * Accepts either:
+ * - "Bearer <token>"
+ * - "<token>"
+ *
+ * Returns:
+ * - { ok: true, user: {...} }
+ * - { ok: false, error: "..." }
+ */
 export async function verifyBearerToken(authHeaderOrToken) {
   try {
-    const token = extractToken(authHeaderOrToken);
+    const rawValue = authHeaderOrToken || "";
+
+    const token = rawValue.startsWith("Bearer ")
+      ? rawValue.slice(7).trim()
+      : rawValue.trim();
 
     if (!token) {
       return { ok: false, error: "MISSING_TOKEN" };
     }
 
-    console.log("JWT_SECRET loaded?", !!JWT_SECRET);
+    const jwtSecret = process.env.JWT_SECRET;
 
-    const decoded = jwt.verify(token, JWT_SECRET);
+    if (!jwtSecret) {
+      return { ok: false, error: "JWT_SECRET_NOT_CONFIGURED" };
+    }
 
-    console.log("JWT decoded payload:", decoded);
+    const decoded = jwt.verify(token, jwtSecret);
 
-    if (!decoded?.tenantId) {
+    if (!decoded || !decoded.tenantId) {
       return { ok: false, error: "INVALID_TOKEN_CLAIMS" };
     }
 
     return {
       ok: true,
       user: {
-        id: decoded.id ?? decoded.userId ?? decoded.email ?? null,
-        email: decoded.email ?? null,
+        id: decoded.id || decoded.sub || null,
+        email: decoded.email || null,
         tenantId: decoded.tenantId,
-        role: decoded.role ?? "user",
-        permissions: decoded.permissions ?? [],
+        role: decoded.role || "user",
+        permissions: Array.isArray(decoded.permissions) ? decoded.permissions : [],
       },
     };
-  } catch (err) {
-    console.error("JWT VERIFY ERROR:", err.name, err.message);
-
-    if (err.name === "TokenExpiredError") {
-      return { ok: false, error: "TOKEN_EXPIRED" };
-    }
-
-    if (err.name === "JsonWebTokenError") {
-      return { ok: false, error: `INVALID_TOKEN: ${err.message}` };
-    }
-
-    return { ok: false, error: `AUTH_VERIFICATION_FAILED: ${err.message}` };
+  } catch (error) {
+    return {
+      ok: false,
+      error: error?.name === "TokenExpiredError" ? "TOKEN_EXPIRED" : "INVALID_TOKEN",
+    };
   }
-}
-
-export function getTenantContext(userOrTenantId) {
-  let tenantId = null;
-  let userId = null;
-  let role = "user";
-  let permissions = [];
-
-  if (typeof userOrTenantId === "string") {
-    tenantId = userOrTenantId;
-  } else if (userOrTenantId && typeof userOrTenantId === "object") {
-    tenantId = userOrTenantId.tenantId;
-    userId = userOrTenantId.id ?? null;
-    role = userOrTenantId.role ?? "user";
-    permissions = userOrTenantId.permissions ?? [];
-  }
-
-  if (!tenantId) {
-    throw new Error("Missing tenantId for tenant context");
-  }
-
-  return {
-    tenantId,
-    userId,
-    role,
-    permissions,
-  };
 }
