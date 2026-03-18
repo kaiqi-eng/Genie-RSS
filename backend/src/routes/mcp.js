@@ -13,6 +13,28 @@ import { summarizeFeeds } from "../services/feedSummarizer.js";
 const router = express.Router();
 
 /**
+ * Global audit middleware for all endpoints
+ */
+router.use((req, res, next) => {
+  const auditId = uuidv4();
+  const tenantId = req.context?.tenantId || null;
+  const endpoint = req.originalUrl;
+  const method = req.method;
+
+  // Log "started"
+  safeLogAudit(tenantId, endpoint, method, req.body || req.query || {}, auditId, "started");
+
+  // Hook into res.json to log success automatically
+  const originalJson = res.json.bind(res);
+  res.json = (body) => {
+    safeLogAudit(tenantId, endpoint, method, req.body || req.query || {}, auditId, "success", body);
+    return originalJson(body);
+  };
+
+  next();
+});
+
+/**
  * Auth middleware
  */
 router.use(async (req, res, next) => {
@@ -25,7 +47,10 @@ router.use(async (req, res, next) => {
       return res.status(401).json({
         jsonrpc: "2.0",
         id: null,
-        error: { code: -32001, message: "Unauthorized: Missing or invalid Authorization header" },
+        error: {
+          code: -32001,
+          message: "Unauthorized: Missing or invalid Authorization header",
+        },
       });
     }
 
@@ -35,7 +60,10 @@ router.use(async (req, res, next) => {
       return res.status(401).json({
         jsonrpc: "2.0",
         id: null,
-        error: { code: -32001, message: `Unauthorized: ${authResult?.error || "Invalid token"}` },
+        error: {
+          code: -32001,
+          message: `Unauthorized: ${authResult?.error || "Invalid token"}`,
+        },
       });
     }
 
@@ -64,27 +92,70 @@ router.get("/health", (req, res) => {
 });
 
 /**
+ * Audit wrapper for JSON-RPC endpoint
+ */
+function withAudit(handler) {
+  return async (req, res, next) => {
+    const auditId = uuidv4();
+    const tenantId = req.context?.tenantId || null;
+    const endpoint = req.originalUrl;
+    const method = req.body?.method || req.method;
+
+    // Log "started" specifically for JSON-RPC
+    safeLogAudit(tenantId, endpoint, method, req.body || {}, auditId, "started");
+
+    try {
+      const handlerResult = await handler(req, res, auditId);
+
+      // Log success with actual result
+      safeLogAudit(tenantId, endpoint, method, req.body || {}, auditId, "success", handlerResult);
+
+      if (handlerResult) {
+        return res.status(200).json(handlerResult);
+      }
+      return;
+    } catch (error) {
+      // Log failure
+      safeLogAudit(
+        tenantId,
+        endpoint,
+        method,
+        req.body || {},
+        auditId,
+        "fail",
+        null,
+        error?.message || "Unhandled error"
+      );
+
+      return res.status(500).json({
+        jsonrpc: req.body?.jsonrpc || "2.0",
+        id: req.body?.id ?? null,
+        error: { code: -32000, message: error?.message || "Internal server error" },
+      });
+    }
+  };
+}
+
+/**
  * Main JSON-RPC endpoint
  */
-router.post("/", async (req, res) => {
-  const auditId = uuidv4();
-  try {
+router.post(
+  "/",
+  withAudit(async (req) => {
     const body = req.body || {};
     const { jsonrpc = "2.0", id = null, method, params = {} } = body;
 
     if (!method) {
-      safeLogAudit(req.context?.tenantId || null, "unknown", params, auditId, "fail", "Missing method");
-      return res.status(400).json({
+      return {
         jsonrpc,
         id,
         error: { code: -32600, message: "Invalid Request: Missing method" },
-      });
+      };
     }
 
     // ---------------- TOOLS LIST ----------------
     if (method === "tools/list") {
-      safeLogAudit(req.context?.tenantId || null, method, params, auditId, "success", null);
-      return res.status(200).json({
+      return {
         jsonrpc,
         id,
         result: {
@@ -96,14 +167,10 @@ router.post("/", async (req, res) => {
                 type: "object",
                 properties: {
                   url: { type: "string", description: "Single RSS or site URL" },
-                  feeds: {
-                    type: "array",
-                    items: { type: "string" },
-                    description: "Array of RSS or site URLs"
-                  }
+                  feeds: { type: "array", items: { type: "string" }, description: "Array of RSS or site URLs" },
                 },
-                anyOf: [{ required: ["url"] }, { required: ["feeds"] }]
-              }
+                anyOf: [{ required: ["url"] }, { required: ["feeds"] }],
+              },
             },
             {
               name: "feed_summary",
@@ -120,22 +187,21 @@ router.post("/", async (req, res) => {
                         link: { type: "string" },
                         content: { type: "string" },
                         pubDate: { type: "string" },
-                        source: { type: "string" }
-                      }
-                    }
-                  }
+                        source: { type: "string" },
+                      },
+                    },
+                  },
                 },
-                required: ["feeds"]
-              }
-            }
-          ]
-        }
-      });
+                required: ["feeds"],
+              },
+            },
+          ],
+        },
+      };
     }
 
     // ---------------- TOOLS CALL ----------------
     if (method === "tools/call") {
-      // Use `args` instead of `arguments` to avoid reserved word issues
       const { name, args = {} } = params;
       let result;
 
@@ -145,43 +211,32 @@ router.post("/", async (req, res) => {
         } else if (args.url && typeof args.url === "string") {
           result = await processFeeds({ url: args.url });
         } else {
-          return res.status(400).json({
+          return {
             jsonrpc,
             id,
-            error: { code: -32602, message: "You must provide 'url' or 'feeds'" }
-          });
+            error: { code: -32602, message: "You must provide 'url' or 'feeds'" },
+          };
         }
       } else if (name === "feed_summary") {
         result = await summarizeFeeds(args.feeds);
       } else {
-        safeLogAudit(req.context?.tenantId || null, method, params, auditId, "fail", "Unknown tool");
-        return res.status(400).json({
+        return {
           jsonrpc,
           id,
-          error: { code: -32601, message: "Unknown tool" }
-        });
+          error: { code: -32601, message: "Unknown tool" },
+        };
       }
 
-      safeLogAudit(req.context?.tenantId || null, method, params, auditId, "success", null);
-      return res.status(200).json({ jsonrpc, id, result });
+      return { jsonrpc, id, result };
     }
 
     // ---------------- METHOD NOT FOUND ----------------
-    safeLogAudit(req.context?.tenantId || null, method, params, auditId, "fail", "Method not found");
-    return res.status(404).json({
+    return {
       jsonrpc,
       id,
-      error: { code: -32601, message: `Method not found: ${method}` }
-    });
-
-  } catch (error) {
-    safeLogAudit(req.context?.tenantId || null, req.body?.method || "unknown", req.body?.params || {}, auditId, "fail", error.message || "Unhandled MCP error");
-    return res.status(500).json({
-      jsonrpc: "2.0",
-      id: req.body?.id ?? null,
-      error: { code: -32000, message: error?.message || "Internal server error" }
-    });
-  }
-});
+      error: { code: -32601, message: `Method not found: ${method}` },
+    };
+  })
+);
 
 export default router;
