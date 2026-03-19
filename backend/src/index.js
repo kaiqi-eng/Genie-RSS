@@ -1,6 +1,10 @@
-import express from 'express';
+import express from "express";
+import dotenv from "dotenv";
+import mcpRoutes from "./routes/mcp.js";
+import authRoutes from "./routes/auth.js";
+import auditRoutes from "./routes/audit.js";
+import { createAuditMiddleware } from "./services/audit.js";
 import cors from 'cors';
-import dotenv from 'dotenv';
 import swaggerUi from 'swagger-ui-express';
 import { swaggerSpec } from './config/swagger.js';
 import { apiKeyAuth } from './middleware/auth.js';
@@ -12,103 +16,83 @@ import summarizeRoutes from "./routes/summarize.js";
 import transcriptRoutes from "./routes/transcripts.js";
 import intelRoutes from './routes/intel.js';
 import { createLogger } from './utils/logger.js';
-import mcpRoutes from "./mcp/server.js";
 
 dotenv.config();
 
-const logger = createLogger('server');
-
 const app = express();
-const PORT = process.env.PORT || 3001;
 
-// Process-level error handlers to prevent crashes
-process.on('unhandledRejection', (reason, promise) => {
-  logger.error('Unhandled promise rejection', {
-    reason: reason instanceof Error ? reason.message : reason,
-    error: reason instanceof Error ? reason : undefined
+// Important for Render / proxies
+app.set("trust proxy", 1);
+
+// Body parser
+app.use(express.json({ limit: process.env.BODY_LIMIT_JSON || "2mb" }));
+
+// Global audit middleware
+// This captures request + response for all routes
+app.use(createAuditMiddleware());
+
+/**
+ * Root health
+ */
+app.get("/", (req, res) => {
+  return res.status(200).json({
+    ok: true,
+    message: "Server is running",
+    env: process.env.NODE_ENV || "development",
+    auditId: req.auditId || null,
   });
-  // Don't exit in production - log for monitoring
 });
 
-process.on('uncaughtException', (error) => {
-  logger.error('Uncaught exception - shutting down', { error });
-  // Give time to log, then exit (uncaught exceptions leave app in undefined state)
-  process.exit(1);
-});
-
-// Middleware
-app.use(cors());
-app.use(express.json()); // Must be before routes
-app.use(express.urlencoded({ extended: true }));
-
-// Request logging (after body parsing so we can log request bodies)
-app.use(requestLoggerMiddleware);
-
-// Swagger documentation (no auth required)
-app.use('/api-docs', swaggerUi.serve, swaggerUi.setup(swaggerSpec));
-app.get('/api-docs.json', (req, res) => {
-  res.json(swaggerSpec);
-});
-
-// Protected Routes (require API key)
-// Rate limiting is applied first to block IPs with excessive failed auth attempts
-app.use('/api/rss', rateLimitMiddleware, apiKeyAuth, rssRoutes);
-app.use('/api/rss/feed', rateLimitMiddleware, apiKeyAuth, thirdEyeRoutes);
-app.use("/api/summarize", rateLimitMiddleware, apiKeyAuth, summarizeRoutes);
-app.use("/api/transcript", rateLimitMiddleware, apiKeyAuth, transcriptRoutes);
-app.use('/api/intel', rateLimitMiddleware, apiKeyAuth, intelRoutes);
-
-// Swagger documentation (no auth required)
-app.use('/api-docs', swaggerUi.serve, swaggerUi.setup(swaggerSpec));
-app.get('/api-docs.json', (req, res) => {
-  res.json(swaggerSpec);
-});
-
-// Protected Routes (require API key)
-// Rate limiting is applied first to block IPs with excessive failed auth attempts
-app.use('/api/rss', rateLimitMiddleware, apiKeyAuth, rssRoutes);
-app.use('/api/rss/feed', rateLimitMiddleware, apiKeyAuth, thirdEyeRoutes);
-app.use("/api/summarize", rateLimitMiddleware, apiKeyAuth, summarizeRoutes);
-app.use("/api/transcript", rateLimitMiddleware, apiKeyAuth, transcriptRoutes);
-app.use('/api/intel', rateLimitMiddleware, apiKeyAuth, intelRoutes);
+/**
+ * Routes
+ */
+app.use("/auth", authRoutes);
+app.use("/audit", auditRoutes);
 app.use("/mcp", mcpRoutes);
-// Health check
-app.get('/health', (req, res) => {
-  res.json({ status: 'ok' });
-});
 
-// 404 handler for unknown routes
-app.use((req, res, next) => {
-  res.status(404).json({
-    error: 'Not Found',
-    message: `Route ${req.method} ${req.path} not found`
+/**
+ * 404 handler
+ */
+app.use((req, res) => {
+  return res.status(404).json({
+    success: false,
+    error: "Route not found",
+    path: req.originalUrl,
+    auditId: req.auditId || null,
   });
 });
 
-// Global error handler (must be last middleware)
-app.use((err, req, res, next) => {
-  logger.error('Express error', {
-    requestId: req.requestId,
-    method: req.method,
-    path: req.path,
-    error: err
-  });
+/**
+ * Global error handler
+ */
+app.use((err, req, res, _next) => {
+  console.error(
+    JSON.stringify({
+      timestamp: new Date().toISOString(),
+      type: "unhandled_error",
+      message: err?.message || "Unknown error",
+      stack: process.env.NODE_ENV !== "production" ? err?.stack : undefined,
+      path: req?.originalUrl,
+      auditId: req?.auditId || null,
+    })
+  );
 
-  // Don't leak error details in production
-  const statusCode = err.statusCode || err.status || 500;
-  res.status(statusCode).json({
-    error: statusCode === 500 ? 'Internal Server Error' : err.message,
-    requestId: req.requestId,
-    ...(process.env.NODE_ENV === 'development' && { stack: err.stack })
+  return res.status(500).json({
+    success: false,
+    error: err?.message || "Internal server error",
+    auditId: req?.auditId || null,
   });
 });
 
-// Only start server if not in test mode
-if (process.env.NODE_ENV !== 'test') {
-  app.listen(PORT, () => {
-    logger.info('Server started', { port: PORT, url: `http://localhost:${PORT}` });
-  });
-}
+const PORT = Number(process.env.PORT || 3000);
 
-// Export app for testing
-export default app;
+app.listen(PORT, "0.0.0.0", () => {
+  console.log(
+    JSON.stringify({
+      timestamp: new Date().toISOString(),
+      type: "server_started",
+      port: PORT,
+      env: process.env.NODE_ENV || "development",
+    })
+  );
+});

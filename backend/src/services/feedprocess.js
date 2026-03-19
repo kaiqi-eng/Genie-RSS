@@ -1,4 +1,5 @@
 /**
+ * feedprocess.js
  * BHA Third Eye Engine Service
  * Node.js v2.2 (Enhanced)
  */
@@ -17,36 +18,19 @@ import { credentials, timeouts } from "../config/index.js";
 
 // ---------------- CONFIG ----------------
 
-// Lazy-loaded credentials (allows tests to run without all env vars)
 const getScrapingBeeKey = () => {
   const key = credentials.scrapingBeeApiKey;
-  if (!key) {
-    throw new Error("Missing SCRAPINGBEE_API_KEY in .env");
-  }
+  if (!key) throw new Error("Missing SCRAPINGBEE_API_KEY in .env");
   return key;
 };
+
 const NEWSLETTER_EMAIL = credentials.newsletter.email;
 const NEWSLETTER_PASSWORD = credentials.newsletter.password;
-const WEBHOOK_URL = credentials.webhookUrl;
 
 // ---------------- HELPERS ----------------
 
 export const hashId = (...parts) =>
   crypto.createHash("md5").update(parts.join("")).digest("hex");
-
-// export const sendToWebhook = async (payload) => {
-//   if (!WEBHOOK_URL) return { status: "disabled" };
-
-//   try {
-//     const response = await axios.post(WEBHOOK_URL, payload, {
-//       headers: { "Content-Type": "application/json" },
-//       timeout: 20000,
-//     });
-//     return { status: "delivered", code: response.status };
-//   } catch (err) {
-//     return { status: "failed", error: err.message };
-//   }
-// };
 
 // ---------------- RSS PARSER ----------------
 
@@ -58,18 +42,12 @@ export const parseRSS = async (xml, source = "unknown", tier = "direct") => {
       mergeAttrs: true,
     });
 
-    const feedItems =
-      parsed?.rss?.channel?.item ||
-      parsed?.feed?.entry ||
-      [];
-
+    const feedItems = parsed?.rss?.channel?.item || parsed?.feed?.entry || [];
     const list = Array.isArray(feedItems) ? feedItems : [feedItems];
 
     for (const el of list.slice(0, 25)) {
       const title = el.title?._ || el.title || "";
 
-      // RSS: el.link (string)
-      // YouTube Atom: array or object with rel=alternate
       let link = "";
       if (Array.isArray(el.link)) {
         const alternate = el.link.find((l) => l.rel === "alternate");
@@ -78,22 +56,11 @@ export const parseRSS = async (xml, source = "unknown", tier = "direct") => {
         link = el.link?.href || el.link || "";
       }
 
-      const published =
-        el.pubDate ||
-        el.published ||
-        el.updated ||
-        "";
+      const published = el.pubDate || el.published || el.updated || "";
 
-      // YouTube media support (optional, safe fallback)
-      const media =
-        el["media:group"] || {};
-
+      const media = el["media:group"] || {};
       const description =
-        media["media:description"] ||
-        el.description ||
-        el.summary ||
-        el.content ||
-        "";
+        media["media:description"] || el.description || el.summary || el.content || "";
 
       if (title && link) {
         items.push({
@@ -110,9 +77,9 @@ export const parseRSS = async (xml, source = "unknown", tier = "direct") => {
   } catch {
     return [];
   }
-
   return items;
 };
+
 // ---------------- FEED DISCOVERY ----------------
 
 const discoverFeedUrls = (html, baseUrl) => {
@@ -128,10 +95,7 @@ const discoverFeedUrls = (html, baseUrl) => {
         href = new URL(href, baseUrl).href;
       }
 
-      // Validate discovered feed URLs for SSRF protection
-      if (isValidUrl(href)) {
-        feeds.add(href);
-      }
+      if (isValidUrl(href)) feeds.add(href);
     }
   );
 
@@ -201,10 +165,9 @@ export const fetchViaScrapingBee = async (url) => {
   }
 };
 
-// ---------------- SMART FETCH (FIXED) ----------------
+// ---------------- SMART FETCH ----------------
 
 export const smartFetch = async (url) => {
-  // Validate URL for SSRF protection
   validateUrl(url);
 
   // 1️⃣ Direct RSS
@@ -215,18 +178,16 @@ export const smartFetch = async (url) => {
   try {
     const html = await fetchHtmlDirect(url);
     const feeds = discoverFeedUrls(html, url);
-
     for (const feedUrl of feeds) {
       const items = await fetchDirect(feedUrl);
       if (items.length) return items;
     }
   } catch {}
 
-  // 3️⃣ ScrapingBee HTML → discover RSS (blocked sites)
+  // 3️⃣ ScrapingBee HTML → discover RSS
   try {
     const html = await fetchHtmlViaScrapingBee(url);
     const feeds = discoverFeedUrls(html, url);
-
     for (const feedUrl of feeds) {
       const items = await fetchDirect(feedUrl);
       if (items.length) return items;
@@ -298,11 +259,13 @@ export const collectIntel = async (feeds = []) => {
   };
 };
 
+// ---------------- MAIN PROCESS ----------------
+
 export async function processFeeds(input) {
   let feeds = [];
   if (input.feeds && Array.isArray(input.feeds) && input.feeds.length > 0) {
     feeds = input.feeds;
-  } else if (input.url) {
+  } else if (input.url && typeof input.url === "string") {
     feeds = [input.url];
   } else {
     throw new Error("feeds must be a non-empty array or url must be provided");
@@ -312,11 +275,10 @@ export async function processFeeds(input) {
 
   return {
     feed: {
-      items: intel.data
+      items: intel.data,
     },
     total_items: intel.total_items,
     engine: intel.engine,
-    timestamp: intel.timestamp
+    timestamp: intel.timestamp,
   };
 }
-
