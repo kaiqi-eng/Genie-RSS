@@ -9,9 +9,7 @@ export function createAccessToken(user) {
     permissions: user.permissions || [],
   };
 
-  console.log(
-  jwt.sign(payload, process.env.JWT_SECRET, {
-    expiresIn: "1h",
-  })
-);
+  const token = jwt.sign(payload, process.env.JWT_SECRET); 
+  console.log(token);
+  return token;
 }

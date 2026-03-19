@@ -1,12 +1,39 @@
 import jwt from "jsonwebtoken";
 
+function getJwtSecret() {
+  const secret = process.env.JWT_SECRET;
+  if (!secret) {
+    throw new Error("JWT_SECRET is not configured");
+  }
+  return secret;
+}
+
+/**
+ * Create JWT token with NO EXPIRY
+ * NOTE:
+ * - No expiresIn is intentionally set.
+ * - This means token will remain valid until secret changes.
+ */
+export function createAccessToken(user) {
+  const payload = {
+    sub: user.id || user.email || "user",
+    id: user.id || null,
+    email: user.email || null,
+    tenantId: user.tenantId,
+    role: user.role || "user",
+    permissions: Array.isArray(user.permissions) ? user.permissions : [],
+  };
+
+  return jwt.sign(payload, getJwtSecret());
+}
+
 /**
  * Accepts either:
  * - "Bearer <token>"
  * - "<token>"
  *
  * Returns:
- * - { ok: true, user: {...} }
+ * - { ok: true, user: {...}, token: "..." }
  * - { ok: false, error: "..." }
  */
 export async function verifyBearerToken(authHeaderOrToken) {
@@ -21,13 +48,7 @@ export async function verifyBearerToken(authHeaderOrToken) {
       return { ok: false, error: "MISSING_TOKEN" };
     }
 
-    const jwtSecret = process.env.JWT_SECRET;
-
-    if (!jwtSecret) {
-      return { ok: false, error: "JWT_SECRET_NOT_CONFIGURED" };
-    }
-
-    const decoded = jwt.verify(token, jwtSecret);
+    const decoded = jwt.verify(token, getJwtSecret());
 
     if (!decoded || !decoded.tenantId) {
       return { ok: false, error: "INVALID_TOKEN_CLAIMS" };
@@ -35,6 +56,7 @@ export async function verifyBearerToken(authHeaderOrToken) {
 
     return {
       ok: true,
+      token,
       user: {
         id: decoded.id || decoded.sub || null,
         email: decoded.email || null,

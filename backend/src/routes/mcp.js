@@ -1,161 +1,102 @@
-/**
- * MCP Router
- * Handles JSON-RPC for tools
- */
 import express from "express";
-import { v4 as uuidv4 } from "uuid";
 import { verifyBearerToken } from "../services/auth.js";
 import { getTenantContext } from "../services/context.js";
-import { safeLogAudit } from "../services/audit.js";
 import { processFeeds } from "../services/feedprocess.js";
 import { summarizeFeeds } from "../services/feedSummarizer.js";
 
 const router = express.Router();
 
-/**
- * Global audit middleware for all endpoints
- */
-router.use((req, res, next) => {
-  const auditId = uuidv4();
-  const tenantId = req.context?.tenantId || null;
-  const endpoint = req.originalUrl;
-  const method = req.method;
-
-  // Log "started"
-  safeLogAudit(tenantId, endpoint, method, req.body || req.query || {}, auditId, "started");
-
-  // Hook into res.json to log success automatically
-  const originalJson = res.json.bind(res);
-  res.json = (body) => {
-    safeLogAudit(tenantId, endpoint, method, req.body || req.query || {}, auditId, "success", body);
-    return originalJson(body);
-  };
-
-  next();
-});
-
-/**
- * Auth middleware
- */
-router.use(async (req, res, next) => {
-  const auditId = uuidv4();
-  try {
-    const authHeader = req.headers.authorization;
-
-    if (!authHeader || !authHeader.startsWith("Bearer ")) {
-      safeLogAudit(null, "auth", {}, auditId, "fail", "Missing Authorization");
-      return res.status(401).json({
-        jsonrpc: "2.0",
-        id: null,
-        error: {
-          code: -32001,
-          message: "Unauthorized: Missing or invalid Authorization header",
-        },
-      });
-    }
-
-    const authResult = await verifyBearerToken(authHeader);
-    if (!authResult?.ok || !authResult?.user?.tenantId) {
-      safeLogAudit(null, "auth", {}, auditId, "fail", authResult?.error || "Invalid token");
-      return res.status(401).json({
-        jsonrpc: "2.0",
-        id: null,
-        error: {
-          code: -32001,
-          message: `Unauthorized: ${authResult?.error || "Invalid token"}`,
-        },
-      });
-    }
-
-    req.tenant = authResult.user;
-    req.context = getTenantContext(authResult.user);
-    next();
-  } catch (err) {
-    safeLogAudit(null, "auth", {}, auditId, "fail", err.message || "Unknown auth error");
-    return res.status(401).json({
-      jsonrpc: "2.0",
-      id: null,
-      error: { code: -32001, message: `Unauthorized: ${err.message || "Unknown auth error"}` },
-    });
-  }
-});
-
-/**
- * Health check
- */
-router.get("/health", (req, res) => {
-  return res.status(200).json({
-    ok: true,
-    tenantId: req.context?.tenantId || null,
-    message: "MCP route healthy",
-  });
-});
-
-/**
- * Audit wrapper for JSON-RPC endpoint
- */
-function withAudit(handler) {
-  return async (req, res, next) => {
-    const auditId = uuidv4();
-    const tenantId = req.context?.tenantId || null;
-    const endpoint = req.originalUrl;
-    const method = req.body?.method || req.method;
-
-    // Log "started" specifically for JSON-RPC
-    safeLogAudit(tenantId, endpoint, method, req.body || {}, auditId, "started");
-
-    try {
-      const handlerResult = await handler(req, res, auditId);
-
-      // Log success with actual result
-      safeLogAudit(tenantId, endpoint, method, req.body || {}, auditId, "success", handlerResult);
-
-      if (handlerResult) {
-        return res.status(200).json(handlerResult);
-      }
-      return;
-    } catch (error) {
-      // Log failure
-      safeLogAudit(
-        tenantId,
-        endpoint,
-        method,
-        req.body || {},
-        auditId,
-        "fail",
-        null,
-        error?.message || "Unhandled error"
-      );
-
-      return res.status(500).json({
-        jsonrpc: req.body?.jsonrpc || "2.0",
-        id: req.body?.id ?? null,
-        error: { code: -32000, message: error?.message || "Internal server error" },
-      });
-    }
+function jsonRpcError(id, code, message) {
+  return {
+    jsonrpc: "2.0",
+    id: id ?? null,
+    error: { code, message },
   };
 }
 
 /**
- * Main JSON-RPC endpoint
+ * Bearer auth middleware for MCP routes
  */
-router.post(
-  "/",
-  withAudit(async (req) => {
+router.use(async (req, res, next) => {
+  try {
+    const authHeader = req.headers.authorization;
+
+    if (!authHeader || !authHeader.startsWith("Bearer ")) {
+      return res.status(401).json(
+        jsonRpcError(
+          null,
+          -32001,
+          "Unauthorized: Missing or invalid Authorization header"
+        )
+      );
+    }
+
+    const authResult = await verifyBearerToken(authHeader);
+
+    if (!authResult?.ok || !authResult?.user?.tenantId) {
+      return res.status(401).json(
+        jsonRpcError(
+          null,
+          -32001,
+          `Unauthorized: ${authResult?.error || "Invalid token"}`
+        )
+      );
+    }
+
+    req.tenant = authResult.user;
+    req.context = getTenantContext(authResult.user);
+
+    next();
+  } catch (error) {
+    return res.status(401).json(
+      jsonRpcError(
+        null,
+        -32001,
+        `Unauthorized: ${error?.message || "Unknown auth error"}`
+      )
+    );
+  }
+});
+
+/**
+ * GET /mcp/health
+ */
+router.get("/health", (req, res) => {
+  return res.status(200).json({
+    ok: true,
+    message: "MCP route healthy",
+    tenantId: req.context?.tenantId || null,
+    userId: req.tenant?.id || null,
+    auditId: req.auditId || null,
+  });
+});
+
+/**
+ * POST /mcp
+ * JSON-RPC endpoint
+ */
+router.post("/", async (req, res) => {
+  try {
     const body = req.body || {};
     const { jsonrpc = "2.0", id = null, method, params = {} } = body;
 
-    if (!method) {
-      return {
-        jsonrpc,
-        id,
-        error: { code: -32600, message: "Invalid Request: Missing method" },
-      };
+    if (jsonrpc !== "2.0") {
+      return res.status(400).json(
+        jsonRpcError(id, -32600, "Invalid Request: jsonrpc must be '2.0'")
+      );
     }
 
-    // ---------------- TOOLS LIST ----------------
+    if (!method || typeof method !== "string") {
+      return res.status(400).json(
+        jsonRpcError(id, -32600, "Invalid Request: Missing method")
+      );
+    }
+
+    // =========================
+    // tools/list
+    // =========================
     if (method === "tools/list") {
-      return {
+      return res.status(200).json({
         jsonrpc,
         id,
         result: {
@@ -166,8 +107,15 @@ router.post(
               inputSchema: {
                 type: "object",
                 properties: {
-                  url: { type: "string", description: "Single RSS or site URL" },
-                  feeds: { type: "array", items: { type: "string" }, description: "Array of RSS or site URLs" },
+                  url: {
+                    type: "string",
+                    description: "Single RSS or site URL",
+                  },
+                  feeds: {
+                    type: "array",
+                    items: { type: "string" },
+                    description: "Array of RSS or site URLs",
+                  },
                 },
                 anyOf: [{ required: ["url"] }, { required: ["feeds"] }],
               },
@@ -197,46 +145,88 @@ router.post(
             },
           ],
         },
-      };
+      });
     }
 
-    // ---------------- TOOLS CALL ----------------
+    // =========================
+    // tools/call
+    // =========================
     if (method === "tools/call") {
-      const { name, args = {} } = params;
-      let result;
+      const toolName = params?.name;
+      const args = params?.args ?? params?.arguments ?? {};
 
-      if (name === "fetch_rss_feed") {
-        if (args.feeds && Array.isArray(args.feeds) && args.feeds.length > 0) {
-          result = await processFeeds({ feeds: args.feeds });
-        } else if (args.url && typeof args.url === "string") {
-          result = await processFeeds({ url: args.url });
-        } else {
-          return {
-            jsonrpc,
-            id,
-            error: { code: -32602, message: "You must provide 'url' or 'feeds'" },
-          };
-        }
-      } else if (name === "feed_summary") {
-        result = await summarizeFeeds(args.feeds);
-      } else {
-        return {
-          jsonrpc,
-          id,
-          error: { code: -32601, message: "Unknown tool" },
-        };
+      if (!toolName || typeof toolName !== "string") {
+        return res.status(400).json(
+          jsonRpcError(id, -32602, "Invalid params: tool name is required")
+        );
       }
 
-      return { jsonrpc, id, result };
+      // fetch_rss_feed
+      if (toolName === "fetch_rss_feed") {
+        let result;
+
+        if (Array.isArray(args.feeds) && args.feeds.length > 0) {
+          result = await processFeeds({ feeds: args.feeds });
+        } else if (typeof args.url === "string" && args.url.trim()) {
+          result = await processFeeds({ url: args.url.trim() });
+        } else {
+          return res.status(400).json(
+            jsonRpcError(
+              id,
+              -32602,
+              "Invalid params: provide 'url' or non-empty 'feeds'"
+            )
+          );
+        }
+
+        return res.status(200).json({
+          jsonrpc,
+          id,
+          result,
+        });
+      }
+
+      // feed_summary
+      if (toolName === "feed_summary") {
+        if (!Array.isArray(args.feeds) || args.feeds.length === 0) {
+          return res.status(400).json(
+            jsonRpcError(
+              id,
+              -32602,
+              "Invalid params: 'feeds' must be a non-empty array"
+            )
+          );
+        }
+
+        const result = await summarizeFeeds(args.feeds);
+
+        return res.status(200).json({
+          jsonrpc,
+          id,
+          result,
+        });
+      }
+
+      return res.status(404).json(
+        jsonRpcError(id, -32601, `Unknown tool: ${toolName}`)
+      );
     }
 
-    // ---------------- METHOD NOT FOUND ----------------
-    return {
-      jsonrpc,
-      id,
-      error: { code: -32601, message: `Method not found: ${method}` },
-    };
-  })
-);
+    // =========================
+    // method not found
+    // =========================
+    return res.status(404).json(
+      jsonRpcError(id, -32601, `Method not found: ${method}`)
+    );
+  } catch (error) {
+    return res.status(500).json(
+      jsonRpcError(
+        req.body?.id ?? null,
+        -32000,
+        error?.message || "Internal server error"
+      )
+    );
+  }
+});
 
 export default router;
