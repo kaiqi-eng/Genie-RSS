@@ -4,6 +4,18 @@ import mcpRoutes from "./routes/mcp.js";
 import authRoutes from "./routes/auth.js";
 import auditRoutes from "./routes/audit.js";
 import { createAuditMiddleware } from "./services/audit.js";
+import cors from 'cors';
+import swaggerUi from 'swagger-ui-express';
+import { swaggerSpec } from './config/swagger.js';
+import { apiKeyAuth } from './middleware/auth.js';
+import { rateLimitMiddleware } from './middleware/rateLimit.js';
+import { requestLoggerMiddleware } from './middleware/requestLogger.js';
+import rssRoutes from './routes/rss.js';
+import thirdEyeRoutes from './routes/feed.js';
+import summarizeRoutes from "./routes/summarize.js";
+import transcriptRoutes from "./routes/transcripts.js";
+import intelRoutes from './routes/intel.js';
+import { createLogger } from './utils/logger.js';
 
 dotenv.config();
 
