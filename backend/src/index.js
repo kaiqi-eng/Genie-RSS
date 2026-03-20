@@ -1,34 +1,36 @@
 import express from "express";
 import dotenv from "dotenv";
+import cors from "cors";
+import swaggerUi from "swagger-ui-express";
 import mcpRoutes from "./routes/mcp.js";
 import authRoutes from "./routes/auth.js";
 import auditRoutes from "./routes/audit.js";
 import { createAuditMiddleware } from "./services/audit.js";
-import cors from 'cors';
-import swaggerUi from 'swagger-ui-express';
-import { swaggerSpec } from './config/swagger.js';
-import { rateLimitMiddleware } from './middleware/rateLimit.js';
-import { requestLoggerMiddleware } from './middleware/requestLogger.js';
-import rssRoutes from './routes/rss.js';
-import thirdEyeRoutes from './routes/feed.js';
+import { swaggerSpec } from "./config/swagger.js";
+import { rateLimitMiddleware } from "./middleware/rateLimit.js";
+import { requestLoggerMiddleware } from "./middleware/requestLogger.js";
+import { apiKeyAuth } from "./middleware/auth.js";
+import rssRoutes from "./routes/rss.js";
+import thirdEyeRoutes from "./routes/feed.js";
 import summarizeRoutes from "./routes/summarize.js";
 import transcriptRoutes from "./routes/transcripts.js";
-import intelRoutes from './routes/intel.js';
-import { createLogger } from './utils/logger.js';
+import intelRoutes from "./routes/intel.js";
 
 dotenv.config();
 
 const app = express();
 
-// Important for Render / proxies
 app.set("trust proxy", 1);
 
-// Body parser
+app.use(cors());
+app.use(requestLoggerMiddleware);
 app.use(express.json({ limit: process.env.BODY_LIMIT_JSON || "2mb" }));
 
-// Global audit middleware
-// This captures request + response for all routes
 app.use(createAuditMiddleware());
+
+app.get("/health", (_req, res) => {
+  res.status(200).json({ status: "ok" });
+});
 
 /**
  * Root health
@@ -42,28 +44,41 @@ app.get("/", (req, res) => {
   });
 });
 
-/**
- * Routes
- */
+app.use("/api-docs", swaggerUi.serve, swaggerUi.setup(swaggerSpec));
+app.get("/api-docs.json", (_req, res) => {
+  res.json(swaggerSpec);
+});
+
+const apiRouter = express.Router();
+apiRouter.use(rateLimitMiddleware);
+apiRouter.use("/rss/feed", apiKeyAuth, thirdEyeRoutes);
+apiRouter.use("/rss", apiKeyAuth, rssRoutes);
+apiRouter.use("/summarize", apiKeyAuth, summarizeRoutes);
+apiRouter.use("/transcript", apiKeyAuth, transcriptRoutes);
+apiRouter.use("/intel", apiKeyAuth, intelRoutes);
+apiRouter.use((req, res) => {
+  return res.status(404).json({
+    success: false,
+    error: "Not Found",
+    path: req.originalUrl,
+    auditId: req.auditId || null,
+  });
+});
+app.use("/api", apiRouter);
+
 app.use("/auth", authRoutes);
 app.use("/audit", auditRoutes);
 app.use("/mcp", mcpRoutes);
 
-/**
- * 404 handler
- */
 app.use((req, res) => {
   return res.status(404).json({
     success: false,
-    error: "Route not found",
+    error: "Not Found",
     path: req.originalUrl,
     auditId: req.auditId || null,
   });
 });
 
-/**
- * Global error handler
- */
 app.use((err, req, res, _next) => {
   console.error(
     JSON.stringify({
@@ -79,19 +94,23 @@ app.use((err, req, res, _next) => {
   return res.status(500).json({
     success: false,
     error: err?.message || "Internal server error",
-    auditId: req?.auditId || null,
+    auditId: req.auditId || null,
   });
 });
 
 const PORT = Number(process.env.PORT || 3000);
 
-app.listen(PORT, "0.0.0.0", () => {
-  console.log(
-    JSON.stringify({
-      timestamp: new Date().toISOString(),
-      type: "server_started",
-      port: PORT,
-      env: process.env.NODE_ENV || "development",
-    })
-  );
-});
+if (process.env.NODE_ENV !== "test") {
+  app.listen(PORT, "0.0.0.0", () => {
+    console.log(
+      JSON.stringify({
+        timestamp: new Date().toISOString(),
+        type: "server_started",
+        port: PORT,
+        env: process.env.NODE_ENV || "development",
+      })
+    );
+  });
+}
+
+export default app;
