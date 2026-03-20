@@ -7,7 +7,6 @@ import { createAuditMiddleware } from "./services/audit.js";
 import cors from 'cors';
 import swaggerUi from 'swagger-ui-express';
 import { swaggerSpec } from './config/swagger.js';
-import { apiKeyAuth } from './middleware/auth.js';
 import { rateLimitMiddleware } from './middleware/rateLimit.js';
 import { requestLoggerMiddleware } from './middleware/requestLogger.js';
 import rssRoutes from './routes/rss.js';
