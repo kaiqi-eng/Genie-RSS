@@ -3,7 +3,6 @@ import { v4 as uuidv4 } from "uuid";
 import { verifyBearerToken } from "../services/auth.js";
 import { getTenantContext } from "../services/context.js";
 import { logAudit } from "../services/audit.js";
-import { processFeeds } from "../services/feedprocess.js";
 import { summarizeFeeds } from "../services/feedSummarizer.js";
 
 const router = express.Router();
