@@ -28,12 +28,36 @@ app.use(express.json({ limit: process.env.BODY_LIMIT_JSON || "2mb" }));
 
 app.use(createAuditMiddleware());
 
+/**
+ * @swagger
+ * /health:
+ *   get:
+ *     summary: Service health check
+ *     description: Returns basic service availability.
+ *     tags: [System]
+ *     security: []
+ *     responses:
+ *       200:
+ *         description: Service is healthy
+ */
 app.get("/health", (_req, res) => {
   res.status(200).json({ status: "ok" });
 });
 
 /**
  * Root health
+ */
+/**
+ * @swagger
+ * /:
+ *   get:
+ *     summary: Root endpoint
+ *     description: Returns runtime status and environment.
+ *     tags: [System]
+ *     security: []
+ *     responses:
+ *       200:
+ *         description: Server is running
  */
 app.get("/", (req, res) => {
   return res.status(200).json({

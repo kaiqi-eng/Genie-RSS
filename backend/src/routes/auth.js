@@ -4,6 +4,71 @@ import { createAccessToken } from "../services/auth.js";
 const router = express.Router();
 
 /**
+ * @swagger
+ * /auth/token:
+ *   post:
+ *     summary: Create bearer token
+ *     description: Validates credentials and returns a bearer token for protected routes.
+ *     tags: [Authentication]
+ *     security: []
+ *     requestBody:
+ *       required: true
+ *       content:
+ *         application/json:
+ *           schema:
+ *             type: object
+ *             required:
+ *               - email
+ *               - password
+ *             properties:
+ *               email:
+ *                 type: string
+ *                 format: email
+ *                 example: test@example.com
+ *               password:
+ *                 type: string
+ *                 example: test123
+ *     responses:
+ *       200:
+ *         description: Token created
+ *         content:
+ *           application/json:
+ *             schema:
+ *               type: object
+ *               properties:
+ *                 success:
+ *                   type: boolean
+ *                 tokenType:
+ *                   type: string
+ *                   example: Bearer
+ *                 expiresIn:
+ *                   type: string
+ *                   nullable: true
+ *                 token:
+ *                   type: string
+ *                 user:
+ *                   type: object
+ *                   properties:
+ *                     id:
+ *                       type: string
+ *                     tenantId:
+ *                       type: string
+ *                     email:
+ *                       type: string
+ *                     role:
+ *                       type: string
+ *                     permissions:
+ *                       type: array
+ *                       items:
+ *                         type: string
+ *       400:
+ *         description: Missing email or password
+ *       401:
+ *         description: Invalid credentials
+ *       500:
+ *         description: Server error
+ */
+/**
  * POST /auth/token
  * Body:
  * {

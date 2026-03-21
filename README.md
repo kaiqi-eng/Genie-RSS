@@ -140,69 +140,42 @@ The Intel API endpoints (`/api/intel/*`) forward requests to an external webhook
 
 ## API Endpoints
 
-### POST /api/rss/fetch
+Swagger is the source of truth for request/response shapes:
+- **Swagger UI**: http://localhost:3001/api-docs
+- **OpenAPI JSON**: http://localhost:3001/api-docs.json
 
-Fetches or generates an RSS feed for a given URL.
+### Auth Types
 
-**Where to call it**
+- **API Key (`X-API-Key`)**: Required for routes under `/api/*`
+- **Bearer (`Authorization: Bearer <token>`)**: Required for `/mcp/*`; optional/conditional for `/audit/*` depending on `AUDIT_REQUIRE_AUTH=true`
+- **No auth**: `/`, `/health`, `/auth/token`, `/api-docs`, `/api-docs.json`
 
-- **Directly to the backend**: `http://localhost:3001/api/rss/fetch`
-- **Via the frontend dev server (Vite proxy)**: `http://localhost:3000/api/rss/fetch`  
-  The frontend proxies any request starting with `/api` to `http://localhost:3001` (see `frontend/vite.config.js`).
+### Route Summary
 
-**Request:**
-```json
-{
-  "url": "https://example.com"
-}
-```
+| Method | Path | Auth | Description |
+|--------|------|------|-------------|
+| GET | `/` | None | Root status endpoint |
+| GET | `/health` | None | Service health check |
+| POST | `/auth/token` | None | Create bearer token using `AUTH_EMAIL`/`AUTH_PASSWORD` |
+| GET | `/audit/health` | Bearer (optional by env) | Audit route health/context |
+| POST | `/audit/test` | Bearer (optional by env) | Test audit logging payload/metadata |
+| GET | `/mcp/health` | Bearer | MCP health/context |
+| POST | `/mcp` | Bearer | MCP JSON-RPC endpoint (`tools/list`, `tools/call`) |
+| POST | `/api/rss/fetch` | API Key | Discover or generate RSS for URL |
+| POST | `/api/rss/feed/processfeed` | API Key | Process one or more feed URLs |
+| POST | `/api/summarize` | API Key | Summarize feed items |
+| POST | `/api/transcript/summarize` | API Key | Summarize transcript content |
+| POST | `/api/intel/addintelurl` | API Key | Add URLs to intel pipeline |
+| POST | `/api/intel/deleteintelurl` | API Key | Remove URLs from intel pipeline |
+| POST | `/api/intel/getdailyintel` | API Key | Retrieve daily intel for date |
 
-**Example (curl):**
+### Example: Fetch RSS
+
 ```bash
-# direct to backend
 curl -X POST "http://localhost:3001/api/rss/fetch" \
   -H "Content-Type: application/json" \
   -H "X-API-Key: your-api-key-here" \
-  -d '{"url":"https://example.com"}'
-
-# via Vite proxy (when frontend dev server is running)
-curl -X POST "http://localhost:3000/api/rss/fetch" \
-  -H "Content-Type: application/json" \
-  -H "X-API-Key: your-api-key-here" \
-  -d '{"url":"https://example.com"}'
-```
-
-**Example (browser fetch):**
-```js
-async function getFeed(url) {
-  const res = await fetch("/api/rss/fetch", {
-    method: "POST",
-    headers: {
-      "Content-Type": "application/json",
-      "X-API-Key": "your-api-key-here"
-    },
-    body: JSON.stringify({ url }),
-  });
-
-  if (!res.ok) throw new Error(await res.text());
-  return res.json();
-}
-
-getFeed("https://example.com").then(console.log);
-```
-
-**Response:**
-```json
-{
-  "source": "discovered" | "generated",
-  "feedUrl": "https://example.com/feed" | null,
-  "feed": {
-    "title": "Feed Title",
-    "description": "Feed description",
-    "items": [...]
-  },
-  "rssXml": "<?xml version=\"1.0\"...>" // Only for generated feeds
-}
+  -d "{\"url\":\"https://example.com\"}"
 ```
 
 ## How It Works

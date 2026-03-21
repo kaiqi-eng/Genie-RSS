@@ -61,6 +61,21 @@ router.use(async (req, res, next) => {
 /**
  * GET /mcp/health
  */
+/**
+ * @swagger
+ * /mcp/health:
+ *   get:
+ *     summary: MCP route health check
+ *     description: Returns MCP route health and authenticated tenant context.
+ *     tags: [MCP]
+ *     security:
+ *       - BearerAuth: []
+ *     responses:
+ *       200:
+ *         description: MCP route healthy
+ *       401:
+ *         description: Missing or invalid bearer token
+ */
 router.get("/health", (req, res) => {
   return res.status(200).json({
     ok: true,
@@ -74,6 +89,51 @@ router.get("/health", (req, res) => {
 /**
  * POST /mcp
  * JSON-RPC endpoint
+ */
+/**
+ * @swagger
+ * /mcp:
+ *   post:
+ *     summary: MCP JSON-RPC endpoint
+ *     description: Supports `tools/list` and `tools/call` methods for RSS processing and summarization.
+ *     tags: [MCP]
+ *     security:
+ *       - BearerAuth: []
+ *     requestBody:
+ *       required: true
+ *       content:
+ *         application/json:
+ *           schema:
+ *             type: object
+ *             required:
+ *               - jsonrpc
+ *               - method
+ *             properties:
+ *               jsonrpc:
+ *                 type: string
+ *                 enum: ["2.0"]
+ *               id:
+ *                 oneOf:
+ *                   - type: string
+ *                   - type: number
+ *                 nullable: true
+ *               method:
+ *                 type: string
+ *                 enum: ["tools/list", "tools/call"]
+ *               params:
+ *                 type: object
+ *                 additionalProperties: true
+ *     responses:
+ *       200:
+ *         description: JSON-RPC result
+ *       400:
+ *         description: Invalid JSON-RPC request
+ *       401:
+ *         description: Missing or invalid bearer token
+ *       404:
+ *         description: Unknown method or tool
+ *       500:
+ *         description: Server error
  */
 router.post("/", async (req, res) => {
   try {

@@ -48,6 +48,21 @@ router.use(async (req, res, next) => {
 /**
  * GET /audit/health
  */
+/**
+ * @swagger
+ * /audit/health:
+ *   get:
+ *     summary: Audit route health check
+ *     description: Returns audit route status and request context metadata.
+ *     tags: [Audit]
+ *     security:
+ *       - BearerAuth: []
+ *     responses:
+ *       200:
+ *         description: Audit route is healthy
+ *       401:
+ *         description: Missing or invalid bearer token when auth is required
+ */
 router.get("/health", (req, res) => {
   return res.status(200).json({
     success: true,
@@ -65,6 +80,30 @@ router.get("/health", (req, res) => {
  * - endpoint
  * - request
  * - response
+ */
+/**
+ * @swagger
+ * /audit/test:
+ *   post:
+ *     summary: Audit test endpoint
+ *     description: Echoes payload and returns audit metadata for verification.
+ *     tags: [Audit]
+ *     security:
+ *       - BearerAuth: []
+ *     requestBody:
+ *       required: false
+ *       content:
+ *         application/json:
+ *           schema:
+ *             type: object
+ *             additionalProperties: true
+ *     responses:
+ *       200:
+ *         description: Audit test executed
+ *       401:
+ *         description: Missing or invalid bearer token when auth is required
+ *       500:
+ *         description: Server error
  */
 router.post("/test", async (req, res) => {
   try {

@@ -22,6 +22,12 @@ const options = {
           name: 'X-API-Key',
           description: 'API key for authentication',
         },
+        BearerAuth: {
+          type: 'http',
+          scheme: 'bearer',
+          bearerFormat: 'JWT',
+          description: 'Bearer token for authenticated routes',
+        },
       },
       schemas: {
         Error: {
@@ -74,7 +80,7 @@ const options = {
     },
     security: [{ ApiKeyAuth: [] }],
   },
-  apis: ['./src/routes/*.js'],
+  apis: ['./src/routes/*.js', './src/index.js'],
 };
 
 export const swaggerSpec = swaggerJsdoc(options);
