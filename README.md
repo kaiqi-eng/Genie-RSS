@@ -67,6 +67,7 @@ Genie-RSS/
 | `API_KEY` | Yes | Your API key for authenticating requests |
 | `OPENAI_API_KEY` | Yes | OpenAI API key for AI summarization |
 | `SCRAPINGBEE_API_KEY` | Yes | ScrapingBee API key for feed processing |
+| `YOUTUBE_API_KEY` | No | YouTube Data API key (preferred path for `/api/youtube/resolve-channels`; web fallback is used if missing) |
 | `WEBHOOK_URL` | No | Webhook URL for intelligence delivery |
 | `NEWSLETTER_EMAIL` | No | Gmail for newsletter extraction |
 | `NEWSLETTER_PASSWORD` | No | Gmail app password |
@@ -168,6 +169,7 @@ Swagger is the source of truth for request/response shapes:
 | POST | `/api/intel/addintelurl` | API Key | Add URLs to intel pipeline |
 | POST | `/api/intel/deleteintelurl` | API Key | Remove URLs from intel pipeline |
 | POST | `/api/intel/getdailyintel` | API Key | Retrieve daily intel for date |
+| POST | `/api/youtube/resolve-channels` | API Key | Resolve channel names to YouTube channel URLs and RSS feed URLs |
 
 ### Example: Fetch RSS
 

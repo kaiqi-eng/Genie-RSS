@@ -15,6 +15,7 @@ import thirdEyeRoutes from "./routes/feed.js";
 import summarizeRoutes from "./routes/summarize.js";
 import transcriptRoutes from "./routes/transcripts.js";
 import intelRoutes from "./routes/intel.js";
+import youtubeRoutes from "./routes/youtube.js";
 
 dotenv.config();
 
@@ -80,6 +81,7 @@ apiRouter.use("/rss", apiKeyAuth, rssRoutes);
 apiRouter.use("/summarize", apiKeyAuth, summarizeRoutes);
 apiRouter.use("/transcript", apiKeyAuth, transcriptRoutes);
 apiRouter.use("/intel", apiKeyAuth, intelRoutes);
+apiRouter.use("/youtube", apiKeyAuth, youtubeRoutes);
 apiRouter.use((req, res) => {
   return res.status(404).json({
     success: false,
