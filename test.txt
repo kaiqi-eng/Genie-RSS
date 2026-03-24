@@ -1,0 +1,103 @@
+1) Health / Root (no auth)
+Root
+curl -X GET http://localhost:3001/
+Health
+curl -X GET http://localhost:3001/health
+
+
+2) Create JWT token
+
+export JWT_TOKEN=$(curl -s -X POST http://localhost:3001/auth/token \
+  -H "Content-Type: application/json" \
+  -d '{
+    "email": "test@example.com",
+    "password": "test123"
+  }' | jq -r '.token')
+
+3) Auth and Audit Endpoints (Public)
+
+Create JWT token
+curl -X POST http://localhost:3001/auth/token   -H "Content-Type: application/json"   -d '{"email":"test@example.com","password":"test123"}'
+
+Get the Logs (currently using Log files)
+curl -X GET http://localhost:3001/audit/logs   -H "Authorization: Bearer $JWT_TOKEN"
+
+4) RSS Endpoint (/api/rss)
+
+This uses routes/rss.js.
+
+Basic RSS fetch test
+old endpoint
+curl -X POST http://localhost:3001/api/rss/fetch \
+  -H "Content-Type: application/json" \
+  -H 'X-API-Key: testing' \
+  -d '{
+    "url": "https://www.youtube.com/feeds/videos.xml?channel_id=UCqzK60-oUOEq36uU9B1MMUg"
+  }'
+
+newer 
+curl -X POST http://localhost:3001/api/rss/feed/processfeed \
+  -H "Content-Type: application/json" \
+  -H "X-API-Key: testing" \
+  -d '{
+    "url": "https://www.youtube.com/feeds/videos.xml?channel_id=UCqzK60-oUOEq36uU9B1MMUg"
+  }'
+
+
+
+5) MCP server
+
+MCP server Health
+curl -X GET http://localhost:3001/mcp/health \
+  -H "Authorization: Bearer $JWT_TOKEN"
+
+MCP server tools
+curl -X POST http://localhost:3001/mcp \
+  -H "Authorization: Bearer $JWT_TOKEN" \
+  -H "Content-Type: application/json" \
+  -d '{
+    "jsonrpc": "2.0",
+    "id": 1,
+    "method": "tools/list"
+  }'
+
+MCP server Rss Feed 
+curl -X POST http://localhost:3001/mcp \
+  -H "Content-Type: application/json" \
+  -H "Authorization: Bearer  $JWT_TOKEN" \
+  -d '{
+    "jsonrpc": "2.0",
+    "id": 2,
+    "method": "tools/call",
+    "params": {
+      "name": "fetch_rss_feed",
+      "arguments": {
+        "url": "https://feeds.bbci.co.uk/news/rss.xml"
+      }
+    }
+  }'
+
+
+MCP server Feed Summary
+curl -X POST http://localhost:3001/mcp \
+  -H "Authorization: Bearer $JWT_TOKEN" \
+  -H "Content-Type: application/json" \
+  -d '{
+    "jsonrpc": "2.0",
+    "id": 2,
+    "method": "tools/call",
+    "params": {
+      "name": "feed_summary",
+      "args": {
+        "feeds": [
+          {
+            "title": "Example",
+            "link": "https://example.com",
+            "content": "Sample content",
+            "pubDate": "2026-03-24",
+            "source": "Example Source"
+          }
+        ]
+      }
+    }
+  }'
