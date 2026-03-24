@@ -1,9 +1,58 @@
 import express from "express";
+import crypto from "crypto";
 import { v4 as uuidv4 } from "uuid";
 import { verifyBearerToken } from "../services/auth.js";
+
+/**
+ * API key guard (README / Swagger: header X-API-Key).
+ * If API_KEY is unset, requests are allowed (local/dev).
+ */
+export function apiKeyAuth(req, res, next) {
+  const validApiKey = process.env.API_KEY;
+  if (!validApiKey || String(validApiKey).trim() === "") {
+    return next();
+  }
+
+  const provided = req.headers["x-api-key"];
+  if (!provided || typeof provided !== "string") {
+    req.rateLimit?.recordFailure?.();
+    return res.status(401).json({
+      error: "Unauthorized",
+      message: "Missing X-API-Key header",
+    });
+  }
+
+  const a = Buffer.from(provided, "utf8");
+  const b = Buffer.from(validApiKey, "utf8");
+  if (a.length !== b.length) {
+    req.rateLimit?.recordFailure?.();
+    return res.status(401).json({
+      error: "Unauthorized",
+      message: "Invalid API key",
+    });
+  }
+
+  try {
+    if (!crypto.timingSafeEqual(a, b)) {
+      req.rateLimit?.recordFailure?.();
+      return res.status(401).json({
+        error: "Unauthorized",
+        message: "Invalid API key",
+      });
+    }
+  } catch {
+    req.rateLimit?.recordFailure?.();
+    return res.status(401).json({
+      error: "Unauthorized",
+      message: "Invalid API key",
+    });
+  }
+
+  req.rateLimit?.clearFailures?.();
+  next();
+}
 import { getTenantContext } from "../services/context.js";
 import { logAudit } from "../services/audit.js";
-import { processFeeds } from "../services/feedprocess.js";
 import { summarizeFeeds } from "../services/feedSummarizer.js";
 
 const router = express.Router();

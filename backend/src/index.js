@@ -1,22 +1,21 @@
-import express from 'express';
-import cors from 'cors';
-import dotenv from 'dotenv';
-import swaggerUi from 'swagger-ui-express';
-import { swaggerSpec } from './config/swagger.js';
-
-import { rateLimitMiddleware } from './middleware/rateLimit.js';
-import { requestLoggerMiddleware } from './middleware/requestLogger.js';
-import { createAuditMiddleware } from './services/audit.js';
-import { createLogger } from './utils/logger.js';
-
-import rssRoutes from './routes/rss.js';
-import feedRoutes from './routes/feed.js';
-import summarizeRoutes from './routes/summarize.js';
-import transcriptRoutes from './routes/transcripts.js';
-import intelRoutes from './routes/intel.js';
-import mcpRoutes from './routes/mcp.js';
-import authRoutes from './routes/auth.js';
-import auditRoutes from './routes/audit.js';
+import express from "express";
+import dotenv from "dotenv";
+import cors from "cors";
+import swaggerUi from "swagger-ui-express";
+import mcpRoutes from "./routes/mcp.js";
+import authRoutes from "./routes/auth.js";
+import auditRoutes from "./routes/audit.js";
+import { createAuditMiddleware } from "./services/audit.js";
+import { swaggerSpec } from "./config/swagger.js";
+import { rateLimitMiddleware } from "./middleware/rateLimit.js";
+import { requestLoggerMiddleware } from "./middleware/requestLogger.js";
+import { apiKeyAuth } from "./middleware/auth.js";
+import rssRoutes from "./routes/rss.js";
+import thirdEyeRoutes from "./routes/feed.js";
+import summarizeRoutes from "./routes/summarize.js";
+import transcriptRoutes from "./routes/transcripts.js";
+import intelRoutes from "./routes/intel.js";
+import youtubeRoutes from "./routes/youtube.js";
 
 dotenv.config();
 
@@ -24,93 +23,46 @@ const logger = createLogger('server');
 const app = express();
 const PORT = process.env.PORT || 3001;
 
-app.set('trust proxy', 1);
+app.set("trust proxy", 1);
 
-// process handlers
-process.on('unhandledRejection', (reason) => {
-  logger.error('Unhandled promise rejection', {
-    reason: reason instanceof Error ? reason.message : reason,
-    error: reason instanceof Error ? reason : undefined
-  });
-});
-
-process.on('uncaughtException', (error) => {
-  logger.error('Uncaught exception - shutting down', { error });
-  process.exit(1);
-});
-
-// middleware
 app.use(cors());
-app.use(express.json({ limit: process.env.BODY_LIMIT_JSON || '2mb' }));
-app.use(express.urlencoded({ extended: true }));
 app.use(requestLoggerMiddleware);
+app.use(express.json({ limit: process.env.BODY_LIMIT_JSON || "2mb" }));
+
 app.use(createAuditMiddleware());
 
-// API key auth middleware
-// const apiKeyAuth = (req, res, next) => {
-//   const validApiKey = process.env.API_KEY;
-//   const skipAuth = process.env.SKIP_API_AUTH === 'true';
+/**
+ * @swagger
+ * /health:
+ *   get:
+ *     summary: Service health check
+ *     description: Returns basic service availability.
+ *     tags: [System]
+ *     security: []
+ *     responses:
+ *       200:
+ *         description: Service is healthy
+ */
+app.get("/health", (_req, res) => {
+  res.status(200).json({ status: "ok" });
+});
 
-//   if (!validApiKey) {
-//     if (skipAuth) {
-//       logger.warn('API_KEY not set and SKIP_API_AUTH=true - API is unprotected (development only)');
-//       return next();
-//     }
-
-//     return res.status(503).json({
-//       success: false,
-//       error: 'Service Unavailable',
-//       message: 'Authentication not configured',
-//     });
-//   }
-
-//   const authHeader = req.headers.authorization;
-//   if (!authHeader || authHeader !== `Bearer ${validApiKey}`) {
-//     return res.status(401).json({
-//       success: false,
-//       error: 'Unauthorized',
-//       message: 'Invalid or missing API key',
-//     });
-//   }
-
-//   next();
-// };
-
-const apiKeyAuth = (req, res, next) => {
-  const validApiKey = process.env.API_KEY;
-  const skipAuth = process.env.SKIP_API_AUTH === 'true';
-
-  if (!validApiKey) {
-    if (skipAuth) {
-      logger.warn(
-        'API_KEY not set and SKIP_API_AUTH=true - API is unprotected (development only)'
-      );
-      return next();
-    }
-
-    return res.status(503).json({
-      success: false,
-      error: 'Service Unavailable',
-      message: 'Authentication not configured',
-    });
-  }
-
-  // Look for X-API-Key header
-  const apiKey = req.headers['x-api-key'];
-  if (!apiKey || apiKey !== validApiKey) {
-    return res.status(401).json({
-      success: false,
-      error: 'Unauthorized',
-      message: 'Invalid or missing X-API-Key',
-    });
-  }
-
-  next();
-};
-
-
-// public routes
-app.get('/', (req, res) => {
+/**
+ * Root health
+ */
+/**
+ * @swagger
+ * /:
+ *   get:
+ *     summary: Root endpoint
+ *     description: Returns runtime status and environment.
+ *     tags: [System]
+ *     security: []
+ *     responses:
+ *       200:
+ *         description: Server is running
+ */
+app.get("/", (req, res) => {
   return res.status(200).json({
     ok: true,
     message: 'Server is running',
@@ -119,41 +71,42 @@ app.get('/', (req, res) => {
   });
 });
 
-app.get('/health', (req, res) => {
-  return res.json({
-    status: 'ok',
+app.use("/api-docs", swaggerUi.serve, swaggerUi.setup(swaggerSpec));
+app.get("/api-docs.json", (_req, res) => {
+  res.json(swaggerSpec);
+});
+
+const apiRouter = express.Router();
+apiRouter.use(rateLimitMiddleware);
+apiRouter.use("/rss/feed", apiKeyAuth, thirdEyeRoutes);
+apiRouter.use("/rss", apiKeyAuth, rssRoutes);
+apiRouter.use("/summarize", apiKeyAuth, summarizeRoutes);
+apiRouter.use("/transcript", apiKeyAuth, transcriptRoutes);
+apiRouter.use("/intel", apiKeyAuth, intelRoutes);
+apiRouter.use("/youtube", apiKeyAuth, youtubeRoutes);
+apiRouter.use((req, res) => {
+  return res.status(404).json({
+    success: false,
+    error: "Not Found",
+    path: req.originalUrl,
     auditId: req.auditId || null,
   });
 });
+app.use("/api", apiRouter);
 
-app.use('/api-docs', swaggerUi.serve, swaggerUi.setup(swaggerSpec));
-app.get('/api-docs.json', (req, res) => res.json(swaggerSpec));
+app.use("/auth", authRoutes);
+app.use("/audit", auditRoutes);
+app.use("/mcp", mcpRoutes);
 
-app.use('/auth', authRoutes);
-app.use('/audit', auditRoutes);
-
-// protected routes
-app.use('/api/rss', rateLimitMiddleware, apiKeyAuth, rssRoutes);
-app.use('/api/rss/feed', rateLimitMiddleware, apiKeyAuth, feedRoutes);
-app.use('/api/summarize', rateLimitMiddleware, apiKeyAuth, summarizeRoutes);
-app.use('/api/transcript', rateLimitMiddleware, apiKeyAuth, transcriptRoutes);
-app.use('/api/intel', rateLimitMiddleware, apiKeyAuth, intelRoutes);
-app.use('/mcp', rateLimitMiddleware, mcpRoutes);
-
-// optional legacy alias
-app.use('/processfeed', rateLimitMiddleware, apiKeyAuth, feedRoutes);
-
-// 404
 app.use((req, res) => {
   return res.status(404).json({
     success: false,
-    error: 'Route not found',
+    error: "Not Found",
     path: req.originalUrl,
     auditId: req.auditId || null,
   });
 });
 
-// error handler
 app.use((err, req, res, _next) => {
   logger.error('Express error', {
     requestId: req.requestId,
@@ -167,20 +120,23 @@ app.use((err, req, res, _next) => {
 
   return res.status(statusCode).json({
     success: false,
-    error: statusCode === 500 ? 'Internal Server Error' : err.message,
-    requestId: req.requestId,
+    error: err?.message || "Internal server error",
     auditId: req.auditId || null,
-    ...(process.env.NODE_ENV === 'development' && { stack: err.stack })
   });
 });
 
-if (process.env.NODE_ENV !== 'test') {
-  app.listen(PORT, '0.0.0.0', () => {
-    logger.info('Server started', {
-      port: PORT,
-      url: `http://0.0.0.0:${PORT}`,
-      env: process.env.NODE_ENV || 'development'
-    });
+const PORT = Number(process.env.PORT || 3000);
+
+if (process.env.NODE_ENV !== "test") {
+  app.listen(PORT, "0.0.0.0", () => {
+    console.log(
+      JSON.stringify({
+        timestamp: new Date().toISOString(),
+        type: "server_started",
+        port: PORT,
+        env: process.env.NODE_ENV || "development",
+      })
+    );
   });
 }
 

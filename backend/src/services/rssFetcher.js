@@ -32,11 +32,16 @@ const parser = new Parser({
  * @param {string} feedUrl - The URL of the RSS feed
  * @param {object} options - Options for fetching
  * @param {boolean} options.bypassCache - Skip cache and fetch fresh data
+ * @param {string} options.since - Optional ISO datetime to filter recent items
  * @returns {object} - Parsed feed data with cache metadata
  */
 export async function fetchAndParseRss(feedUrl, options = {}) {
-  const { bypassCache = false } = options;
-  const cacheKey = `feed:${feedUrl}`;
+  const { bypassCache = false, since } = options;
+  const normalizedSince = since ? new Date(since).toISOString() : null;
+  const sinceTimestamp = normalizedSince ? Date.parse(normalizedSince) : null;
+  const cacheKey = normalizedSince
+    ? `feed:${feedUrl}:since:${normalizedSince}`
+    : `feed:${feedUrl}:since:none`;
 
   // Check cache first (unless bypassing)
   if (!bypassCache) {
@@ -56,23 +61,34 @@ export async function fetchAndParseRss(feedUrl, options = {}) {
   try {
     const feed = await parser.parseURL(feedUrl);
 
+    const mappedItems = (feed.items || []).map(item => ({
+      title: item.title || 'Untitled',
+      link: item.link || '',
+      pubDate: item.pubDate || item.isoDate || null,
+      creator: item.creator || item.author || '',
+      content: item.contentEncoded || item.content || item.contentSnippet || '',
+      contentSnippet: item.contentSnippet || '',
+      categories: item.categories || [],
+      guid: item.guid || item.id || item.link,
+      thumbnail: extractThumbnail(item)
+    }));
+
+    const items = sinceTimestamp === null
+      ? mappedItems
+      : mappedItems.filter(item => {
+        if (!item.pubDate) return false;
+        const itemTimestamp = Date.parse(item.pubDate);
+        if (Number.isNaN(itemTimestamp)) return false;
+        return itemTimestamp >= sinceTimestamp;
+      });
+
     const parsedFeed = {
       title: feed.title || 'Untitled Feed',
       description: feed.description || '',
       link: feed.link || feedUrl,
       language: feed.language || 'en',
       lastBuildDate: feed.lastBuildDate || null,
-      items: (feed.items || []).map(item => ({
-        title: item.title || 'Untitled',
-        link: item.link || '',
-        pubDate: item.pubDate || item.isoDate || null,
-        creator: item.creator || item.author || '',
-        content: item.contentEncoded || item.content || item.contentSnippet || '',
-        contentSnippet: item.contentSnippet || '',
-        categories: item.categories || [],
-        guid: item.guid || item.id || item.link,
-        thumbnail: extractThumbnail(item)
-      })),
+      items,
       _fetchedAt: new Date().toISOString()
     };
 

@@ -59,7 +59,13 @@ const urlArraySchema = z.array(urlSchema).min(1, 'At least one URL is required')
  * POST /api/rss/fetch
  */
 export const rssFetchSchema = z.object({
-  url: urlSchema
+  url: urlSchema,
+  since: z.union([
+    z.string().datetime({ offset: true, message: 'since must be a valid ISO datetime' }),
+    z.null()
+  ])
+    .optional()
+    .transform(value => value ?? undefined)
 });
 
 /**
@@ -149,6 +155,17 @@ export const dailyIntelSchema = z.object({
   )
 });
 
+/**
+ * POST /api/youtube/resolve-channels
+ */
+export const youtubeChannelLookupSchema = z.object({
+  channelNames: z.array(
+    z.string().trim().min(1, 'Channel name cannot be empty')
+  )
+    .min(1, 'At least one channel name is required')
+    .max(25, 'A maximum of 25 channel names is allowed')
+});
+
 // ============================================
 // Pre-built validation middleware
 // ============================================
@@ -159,6 +176,7 @@ export const validateSummarize = validate(summarizeSchema);
 export const validateTranscriptSummarize = validate(transcriptSummarizeSchema);
 export const validateIntelUrls = validate(intelUrlsSchema);
 export const validateDailyIntel = validate(dailyIntelSchema);
+export const validateYoutubeChannelLookup = validate(youtubeChannelLookupSchema);
 
 // Export schemas for testing
 export const schemas = {
@@ -167,5 +185,6 @@ export const schemas = {
   summarize: summarizeSchema,
   transcriptSummarize: transcriptSummarizeSchema,
   intelUrls: intelUrlsSchema,
-  dailyIntel: dailyIntelSchema
+  dailyIntel: dailyIntelSchema,
+  youtubeChannelLookup: youtubeChannelLookupSchema
 };

@@ -52,6 +52,25 @@ describe('Validator Middleware', () => {
       expect(result.success).toBe(true);
     });
 
+    it('should accept valid URL with since datetime', () => {
+      const result = schemas.rssFetch.safeParse({
+        url: 'https://example.com/feed',
+        since: '2026-03-20T00:00:00Z'
+      });
+      expect(result.success).toBe(true);
+    });
+
+    it('should accept null since and treat it as no filter', () => {
+      const result = schemas.rssFetch.safeParse({
+        url: 'https://example.com/feed',
+        since: null
+      });
+      expect(result.success).toBe(true);
+      if (result.success) {
+        expect(result.data.since).toBeUndefined();
+      }
+    });
+
     it('should reject missing URL', () => {
       const result = schemas.rssFetch.safeParse({});
       expect(result.success).toBe(false);
@@ -59,6 +78,14 @@ describe('Validator Middleware', () => {
 
     it('should reject invalid URL format', () => {
       const result = schemas.rssFetch.safeParse({ url: 'not-a-url' });
+      expect(result.success).toBe(false);
+    });
+
+    it('should reject invalid since datetime format', () => {
+      const result = schemas.rssFetch.safeParse({
+        url: 'https://example.com/feed',
+        since: '2026-03-20'
+      });
       expect(result.success).toBe(false);
     });
   });
