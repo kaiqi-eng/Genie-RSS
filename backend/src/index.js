@@ -16,6 +16,7 @@ import summarizeRoutes from "./routes/summarize.js";
 import transcriptRoutes from "./routes/transcripts.js";
 import intelRoutes from "./routes/intel.js";
 import youtubeRoutes from "./routes/youtube.js";
+import { createLogger } from './utils/logger.js';
 
 dotenv.config();
 
