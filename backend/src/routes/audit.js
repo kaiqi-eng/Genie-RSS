@@ -1,6 +1,8 @@
 import express from "express";
 import { verifyBearerToken } from "../services/auth.js";
 import { getTenantContext } from "../services/context.js";
+import fs from "fs";
+import path from "path";
 
 const router = express.Router();
 
@@ -127,5 +129,38 @@ router.post("/test", async (req, res) => {
     });
   }
 });
+
+router.get("/logs", async (req, res) => {
+  try {
+    // Directory where your log files are stored
+    const logsDir = path.join(process.cwd(), "logs");
+
+    // Check if directory exists
+    if (!fs.existsSync(logsDir)) {
+      return res.status(404).json({
+        success: false,
+        error: "Logs directory not found",
+      });
+    }
+
+    // Read all files in the directory
+    const files = fs.readdirSync(logsDir);
+
+    // Optionally filter only .log files
+    const logFiles = files.filter((file) => file.endsWith(".log"));
+
+    return res.status(200).json({
+      success: true,
+      files: logFiles,
+      count: logFiles.length,
+    });
+  } catch (error) {
+    return res.status(500).json({
+      success: false,
+      error: error.message || "Failed to list log files",
+    });
+  }
+});
+
 
 export default router;

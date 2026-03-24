@@ -19,7 +19,9 @@ import youtubeRoutes from "./routes/youtube.js";
 
 dotenv.config();
 
+const logger = createLogger('server');
 const app = express();
+const PORT = process.env.PORT || 3001;
 
 app.set("trust proxy", 1);
 
@@ -63,8 +65,8 @@ app.get("/health", (_req, res) => {
 app.get("/", (req, res) => {
   return res.status(200).json({
     ok: true,
-    message: "Server is running",
-    env: process.env.NODE_ENV || "development",
+    message: 'Server is running',
+    env: process.env.NODE_ENV || 'development',
     auditId: req.auditId || null,
   });
 });
@@ -106,18 +108,17 @@ app.use((req, res) => {
 });
 
 app.use((err, req, res, _next) => {
-  console.error(
-    JSON.stringify({
-      timestamp: new Date().toISOString(),
-      type: "unhandled_error",
-      message: err?.message || "Unknown error",
-      stack: process.env.NODE_ENV !== "production" ? err?.stack : undefined,
-      path: req?.originalUrl,
-      auditId: req?.auditId || null,
-    })
-  );
+  logger.error('Express error', {
+    requestId: req.requestId,
+    method: req.method,
+    path: req.path,
+    auditId: req.auditId || null,
+    error: err
+  });
 
-  return res.status(500).json({
+  const statusCode = err.statusCode || err.status || 500;
+
+  return res.status(statusCode).json({
     success: false,
     error: err?.message || "Internal server error",
     auditId: req.auditId || null,
