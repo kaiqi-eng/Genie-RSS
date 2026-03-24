@@ -21,7 +21,7 @@ dotenv.config();
 
 const logger = createLogger('server');
 const app = express();
-const PORT = process.env.PORT || 3001;
+let PORT = process.env.PORT || 3001;
 
 app.set("trust proxy", 1);
 
@@ -125,7 +125,7 @@ app.use((err, req, res, _next) => {
   });
 });
 
-const PORT = Number(process.env.PORT || 3000);
+PORT = Number(process.env.PORT || 3000);
 
 if (process.env.NODE_ENV !== "test") {
   app.listen(PORT, "0.0.0.0", () => {
