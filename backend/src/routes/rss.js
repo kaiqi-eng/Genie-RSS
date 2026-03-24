@@ -31,6 +31,11 @@ const logger = createLogger('routes:rss');
  *                 format: uri
  *                 description: The URL to fetch or generate RSS for
  *                 example: https://example.com
+ *               since:
+ *                 type: string
+ *                 format: date-time
+ *                 description: Optional ISO datetime. When provided, only items published on/after this timestamp are returned.
+ *                 example: 2026-03-20T00:00:00Z
  *     responses:
  *       200:
  *         description: RSS feed retrieved successfully
@@ -65,7 +70,7 @@ const logger = createLogger('routes:rss');
  */
 router.post('/fetch', validateRssFetch, async (req, res) => {
   try {
-    const { url } = req.body;
+    const { url, since } = req.body;
 
     // Validate URL with SSRF protection
     try {
@@ -82,7 +87,7 @@ router.post('/fetch', validateRssFetch, async (req, res) => {
 
     if (rssUrl) {
       // RSS feed found, fetch and parse it
-      const feed = await fetchAndParseRss(rssUrl);
+      const feed = await fetchAndParseRss(rssUrl, { since });
       return res.json({
         source: 'discovered',
         feedUrl: rssUrl,

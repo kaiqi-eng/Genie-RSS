@@ -59,7 +59,13 @@ const urlArraySchema = z.array(urlSchema).min(1, 'At least one URL is required')
  * POST /api/rss/fetch
  */
 export const rssFetchSchema = z.object({
-  url: urlSchema
+  url: urlSchema,
+  since: z.union([
+    z.string().datetime({ offset: true, message: 'since must be a valid ISO datetime' }),
+    z.null()
+  ])
+    .optional()
+    .transform(value => value ?? undefined)
 });
 
 /**

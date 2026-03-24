@@ -40,6 +40,47 @@ describe('RSS Routes', () => {
       expect(res.body.details[0].message).toMatch(/Invalid URL/i);
     });
 
+    it('should reject invalid since datetime format', async () => {
+      const res = await request(app)
+        .post('/api/rss/fetch')
+        .set('X-API-Key', API_KEY)
+        .send({
+          url: 'https://example.com',
+          since: '2026-03-20'
+        })
+        .expect(400);
+
+      expect(res.body.error).toBe('Validation failed');
+      expect(res.body.details).toEqual(
+        expect.arrayContaining([
+          expect.objectContaining({ field: 'since' })
+        ])
+      );
+    });
+
+    it('should allow null since (treated as no filter)', async () => {
+      const res = await request(app)
+        .post('/api/rss/fetch')
+        .set('X-API-Key', API_KEY)
+        .send({
+          url: 'not-a-valid-url',
+          since: null
+        })
+        .expect(400);
+
+      expect(res.body.error).toBe('Validation failed');
+      expect(res.body.details).toEqual(
+        expect.arrayContaining([
+          expect.objectContaining({ field: 'url' })
+        ])
+      );
+      expect(res.body.details).not.toEqual(
+        expect.arrayContaining([
+          expect.objectContaining({ field: 'since' })
+        ])
+      );
+    });
+
     it('should reject private IP addresses (SSRF protection)', async () => {
       const res = await request(app)
         .post('/api/rss/fetch')
