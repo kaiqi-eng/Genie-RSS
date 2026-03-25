@@ -22,6 +22,8 @@ const parser = new Parser({
     item: [
       ['media:content', 'mediaContent'],
       ['media:thumbnail', 'mediaThumbnail'],
+      ['media:description', 'mediaDescription'],
+      ['media:group', 'mediaGroup'],
       ['content:encoded', 'contentEncoded']
     ]
   }
@@ -61,17 +63,20 @@ export async function fetchAndParseRss(feedUrl, options = {}) {
   try {
     const feed = await parser.parseURL(feedUrl);
 
-    const mappedItems = (feed.items || []).map(item => ({
-      title: item.title || 'Untitled',
-      link: item.link || '',
-      pubDate: item.pubDate || item.isoDate || null,
-      creator: item.creator || item.author || '',
-      content: item.contentEncoded || item.content || item.contentSnippet || '',
-      contentSnippet: item.contentSnippet || '',
-      categories: item.categories || [],
-      guid: item.guid || item.id || item.link,
-      thumbnail: extractThumbnail(item)
-    }));
+    const mappedItems = (feed.items || []).map(item => {
+      const content = extractContent(item);
+      return {
+        title: item.title || 'Untitled',
+        link: item.link || '',
+        pubDate: item.pubDate || item.isoDate || null,
+        creator: item.creator || item.author || '',
+        content,
+        contentSnippet: item.contentSnippet || content.substring(0, 200),
+        categories: item.categories || [],
+        guid: item.guid || item.id || item.link,
+        thumbnail: extractThumbnail(item)
+      };
+    });
 
     const items = sinceTimestamp === null
       ? mappedItems
@@ -115,16 +120,67 @@ export async function fetchAndParseRss(feedUrl, options = {}) {
  * @returns {string|null} - Thumbnail URL or null
  */
 function extractThumbnail(item) {
-  if (item.mediaContent && item.mediaContent.$) {
-    return item.mediaContent.$.url;
+  const mediaContent = Array.isArray(item.mediaContent) ? item.mediaContent[0] : item.mediaContent;
+  const mediaThumbnail = Array.isArray(item.mediaThumbnail) ? item.mediaThumbnail[0] : item.mediaThumbnail;
+
+  if (mediaContent && mediaContent.$) {
+    return mediaContent.$.url;
   }
-  if (item.mediaThumbnail && item.mediaThumbnail.$) {
-    return item.mediaThumbnail.$.url;
+  if (mediaThumbnail && mediaThumbnail.$) {
+    return mediaThumbnail.$.url;
   }
+
+  const mediaGroup = extractMediaGroup(item);
+  const groupThumbnail = Array.isArray(mediaGroup?.['media:thumbnail'])
+    ? mediaGroup['media:thumbnail'][0]
+    : mediaGroup?.['media:thumbnail'] || mediaGroup?.mediaThumbnail;
+  if (groupThumbnail && groupThumbnail.$?.url) {
+    return groupThumbnail.$.url;
+  }
+
   if (item.enclosure && item.enclosure.url) {
     return item.enclosure.url;
   }
   return null;
+}
+
+function extractContent(item) {
+  return (
+    item.contentEncoded ||
+    item.content ||
+    extractMediaDescription(item) ||
+    item.contentSnippet ||
+    ''
+  );
+}
+
+function extractMediaDescription(item) {
+  const directDescription = extractText(item.mediaDescription);
+  if (directDescription) {
+    return directDescription;
+  }
+
+  const mediaGroup = extractMediaGroup(item);
+  if (!mediaGroup) {
+    return '';
+  }
+
+  return extractText(mediaGroup['media:description'] || mediaGroup.mediaDescription || mediaGroup.description);
+}
+
+function extractMediaGroup(item) {
+  const group = item.mediaGroup || item['media:group'];
+  return Array.isArray(group) ? group[0] : group;
+}
+
+function extractText(value) {
+  if (!value) return '';
+  if (typeof value === 'string') return value.trim();
+  if (Array.isArray(value)) return extractText(value[0]);
+  if (typeof value === 'object') {
+    return extractText(value._ || value['#text'] || value.text || '');
+  }
+  return '';
 }
 
 // ============ Cache Management Functions ============
