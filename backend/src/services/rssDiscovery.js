@@ -32,6 +32,13 @@ export async function discoverRssFeed(url) {
 
   try {
     const baseUrl = validatedUrl;
+    const normalizedInputUrl = validatedUrl.toString();
+
+    // If the input URL is already a feed URL, use it directly.
+    const inputIsFeed = await checkFeedExists(normalizedInputUrl);
+    if (inputIsFeed) {
+      return normalizedInputUrl;
+    }
     
     // First, try to find RSS link in HTML
     const response = await axios.get(url, {
