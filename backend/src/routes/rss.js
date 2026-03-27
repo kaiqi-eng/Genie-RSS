@@ -1,4 +1,5 @@
 import express from 'express';
+import { parseStringPromise } from 'xml2js';
 import { discoverRssFeed } from '../services/rssDiscovery.js';
 import { fetchAndParseRss } from '../services/rssFetcher.js';
 import { scrapeWebsite } from '../utils/scraper.js';
@@ -54,9 +55,9 @@ const logger = createLogger('routes:rss');
  *                   description: URL of discovered feed (null if generated)
  *                 feed:
  *                   $ref: '#/components/schemas/Feed'
- *                 rssXml:
- *                   type: string
- *                   description: Raw XML (only for generated feeds)
+ *                 rss:
+ *                   type: object
+ *                   description: Generated RSS structure as JSON (only for generated feeds)
  *       400:
  *         description: Invalid URL or SSRF protection triggered
  *         content:
@@ -98,12 +99,13 @@ router.post('/fetch', validateRssFetch, async (req, res) => {
     // No RSS feed found, scrape the website and generate one
     const scrapedData = await scrapeWebsite(url);
     const generatedFeed = generateRssFeed(url, scrapedData);
+    const rssJson = await parseStringPromise(generatedFeed.xml, { explicitArray: false });
 
     return res.json({
       source: 'generated',
       feedUrl: null,
       feed: generatedFeed.json,
-      rssXml: generatedFeed.xml
+      rss: rssJson
     });
 
   } catch (error) {
