@@ -1,4 +1,5 @@
 import Parser from 'rss-parser';
+import axios from 'axios';
 import NodeCache from 'node-cache';
 import { createLogger } from '../utils/logger.js';
 import { cache, timeouts } from '../config/index.js';
@@ -61,7 +62,7 @@ export async function fetchAndParseRss(feedUrl, options = {}) {
   }
 
   try {
-    const feed = await parser.parseURL(feedUrl);
+    const feed = await parseFeedWithFallback(feedUrl);
 
     const mappedItems = (feed.items || []).map(item => {
       const content = extractContent(item);
@@ -111,6 +112,35 @@ export async function fetchAndParseRss(feedUrl, options = {}) {
   } catch (error) {
     logger.error('Error fetching RSS feed', { feedUrl, error });
     throw new Error(`Failed to fetch RSS feed: ${error.message}`);
+  }
+}
+
+async function parseFeedWithFallback(feedUrl) {
+  try {
+    return await parser.parseURL(feedUrl);
+  } catch (error) {
+    // Some feeds are served gzip-compressed behind redirects and can fail in parseURL.
+    const message = String(error?.message || '');
+    const looksLikeXmlParseFailure =
+      message.includes('Unable to parse XML') ||
+      message.includes('Non-whitespace before first tag');
+
+    if (!looksLikeXmlParseFailure) {
+      throw error;
+    }
+
+    const response = await axios.get(feedUrl, {
+      timeout: timeouts.rssFetch,
+      responseType: 'text',
+      maxRedirects: 5,
+      headers: {
+        'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/91.0.4472.124 Safari/537.36',
+        'Accept': 'application/rss+xml, application/atom+xml, application/xml, text/xml;q=0.9, */*;q=0.8',
+        'Accept-Encoding': 'gzip, deflate, br'
+      }
+    });
+
+    return await parser.parseString(response.data);
   }
 }
 
