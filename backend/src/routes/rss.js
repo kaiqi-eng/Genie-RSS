@@ -4,6 +4,7 @@ import { discoverRssFeed } from '../services/rssDiscovery.js';
 import { fetchAndParseRss } from '../services/rssFetcher.js';
 import { scrapeWebsite } from '../utils/scraper.js';
 import { generateRssFeed } from '../services/rssGenerator.js';
+import { buildYouTubeFeedFromUrl, isYouTubeUrl, YouTubeFeedError } from '../services/youtubeFeedService.js';
 import { validateUrl, UrlValidationError } from '../utils/urlValidator.js';
 import { createLogger } from '../utils/logger.js';
 import { validateRssFetch } from '../middleware/validator.js';
@@ -83,17 +84,53 @@ router.post('/fetch', validateRssFetch, async (req, res) => {
       return res.status(400).json({ error: 'Invalid URL format' });
     }
 
-    // Try to discover RSS feed
+    const youtubeUrl = isYouTubeUrl(url);
+
+    // Try to discover RSS feed first (including YouTube when available)
     const rssUrl = await discoverRssFeed(url);
 
     if (rssUrl) {
-      // RSS feed found, fetch and parse it
-      const feed = await fetchAndParseRss(rssUrl, { since });
-      return res.json({
-        source: 'discovered',
-        feedUrl: rssUrl,
-        feed
-      });
+      try {
+        const feed = await fetchAndParseRss(rssUrl, { since });
+        return res.json({
+          source: 'discovered',
+          feedUrl: rssUrl,
+          feed
+        });
+      } catch (rssError) {
+        if (!youtubeUrl) {
+          throw rssError;
+        }
+
+        logger.warn('Direct YouTube RSS fetch failed; falling back to YouTube API', {
+          url,
+          rssUrl,
+          error: rssError.message
+        });
+      }
+    }
+
+    if (youtubeUrl) {
+      try {
+        const { feedUrl, feed } = await buildYouTubeFeedFromUrl(url, { since });
+        return res.json({
+          source: 'discovered',
+          feedUrl,
+          feed
+        });
+      } catch (error) {
+        if (
+          error instanceof YouTubeFeedError ||
+          (typeof error?.statusCode === 'number' && typeof error?.code === 'string')
+        ) {
+          return res.status(error.statusCode || 502).json({
+            error: error.message,
+            code: error.code
+          });
+        }
+
+        throw error;
+      }
     }
 
     // No RSS feed found, scrape the website and generate one
