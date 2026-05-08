@@ -7,6 +7,7 @@ const mockDiscoverRssFeed = jest.fn();
 const mockFetchAndParseRss = jest.fn();
 const mockScrapeWebsite = jest.fn();
 const mockGenerateRssFeed = jest.fn();
+const mockIsYouTubeUrl = jest.fn();
 
 jest.unstable_mockModule('../../src/services/rssDiscovery.js', () => ({
   discoverRssFeed: mockDiscoverRssFeed
@@ -24,6 +25,12 @@ jest.unstable_mockModule('../../src/services/rssGenerator.js', () => ({
   generateRssFeed: mockGenerateRssFeed
 }));
 
+jest.unstable_mockModule('../../src/services/youtubeFeedService.js', () => ({
+  isYouTubeUrl: mockIsYouTubeUrl,
+  buildYouTubeFeedFromUrl: jest.fn(),
+  YouTubeFeedError: class YouTubeFeedError extends Error {}
+}));
+
 const { default: app } = await import('../../src/index.js');
 
 describe('RSS Route Discovery Path', () => {
@@ -32,6 +39,8 @@ describe('RSS Route Discovery Path', () => {
     mockFetchAndParseRss.mockReset();
     mockScrapeWebsite.mockReset();
     mockGenerateRssFeed.mockReset();
+    mockIsYouTubeUrl.mockReset();
+    mockIsYouTubeUrl.mockReturnValue(false);
   });
 
   it('uses discovered parser path for direct YouTube feed URL and returns multiple items', async () => {

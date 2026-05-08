@@ -75,18 +75,7 @@ export async function searchViaYouTubeApi(channelName) {
     return null;
   }
 
-  const response = await axios.get(YOUTUBE_API_URL, {
-    params: {
-      part: 'snippet',
-      type: 'channel',
-      q: channelName,
-      maxResults: 1,
-      key: apiKey,
-    },
-    timeout: timeouts.rssDiscoveryFast,
-  });
-
-  const item = response?.data?.items?.[0];
+  const item = await lookupChannelByQueryApi(channelName, apiKey);
   const channelId = item?.id?.channelId;
 
   if (!channelId) {
@@ -98,6 +87,25 @@ export async function searchViaYouTubeApi(channelName) {
     matchedTitle: item?.snippet?.title || null,
     source: 'youtube_api',
   };
+}
+
+export async function lookupChannelByQueryApi(channelName, apiKey = process.env.YOUTUBE_API_KEY) {
+  if (!apiKey) {
+    return null;
+  }
+
+  const response = await axios.get(YOUTUBE_API_URL, {
+    params: {
+      part: 'snippet',
+      type: 'channel',
+      q: channelName,
+      maxResults: 1,
+      key: apiKey,
+    },
+    timeout: timeouts.rssDiscoveryFast,
+  });
+
+  return response?.data?.items?.[0] || null;
 }
 
 export async function searchViaWebFallback(channelName) {
