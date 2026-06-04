@@ -1,0 +1,157 @@
+import express from 'express';
+import { parseStringPromise } from 'xml2js';
+import { discoverRssFeed } from '../services/rssDiscovery.js';
+import { fetchAndParseRss } from '../services/rssFetcher.js';
+import { scrapeWebsite } from '../utils/scraper.js';
+import { generateRssFeed } from '../services/rssGenerator.js';
+import { buildYouTubeFeedFromUrl, isYouTubeUrl, YouTubeFeedError } from '../services/youtubeFeedService.js';
+import { validateUrl, UrlValidationError } from '../utils/urlValidator.js';
+import { createLogger } from '../utils/logger.js';
+import { validateRssFetch } from '../middleware/validator.js';
+
+const router = express.Router();
+const logger = createLogger('routes:rss');
+
+/**
+ * @swagger
+ * /rss/fetch:
+ *   post:
+ *     summary: Fetch or generate RSS feed for a URL
+ *     description: Discovers an existing RSS feed for the given URL, or scrapes the website and generates one if no feed is found.
+ *     tags: [RSS]
+ *     requestBody:
+ *       required: true
+ *       content:
+ *         application/json:
+ *           schema:
+ *             type: object
+ *             required:
+ *               - url
+ *             properties:
+ *               url:
+ *                 type: string
+ *                 format: uri
+ *                 description: The URL to fetch or generate RSS for
+ *                 example: https://example.com
+ *               since:
+ *                 type: string
+ *                 format: date-time
+ *                 description: Optional ISO datetime. When provided, only items published on/after this timestamp are returned.
+ *                 example: 2026-03-20T00:00:00Z
+ *     responses:
+ *       200:
+ *         description: RSS feed retrieved successfully
+ *         content:
+ *           application/json:
+ *             schema:
+ *               type: object
+ *               properties:
+ *                 source:
+ *                   type: string
+ *                   enum: [discovered, generated]
+ *                   description: Whether the feed was discovered or generated
+ *                 feedUrl:
+ *                   type: string
+ *                   nullable: true
+ *                   description: URL of discovered feed (null if generated)
+ *                 feed:
+ *                   $ref: '#/components/schemas/Feed'
+ *                 rss:
+ *                   type: object
+ *                   description: Generated RSS structure as JSON (only for generated feeds)
+ *       400:
+ *         description: Invalid URL or SSRF protection triggered
+ *         content:
+ *           application/json:
+ *             schema:
+ *               $ref: '#/components/schemas/Error'
+ *       401:
+ *         description: Missing or invalid API key
+ *       500:
+ *         description: Server error
+ */
+router.post('/fetch', validateRssFetch, async (req, res) => {
+  try {
+    const { url, since } = req.body;
+
+    // Validate URL with SSRF protection
+    try {
+      validateUrl(url);
+    } catch (e) {
+      if (e instanceof UrlValidationError) {
+        return res.status(400).json({ error: e.message, code: e.code });
+      }
+      return res.status(400).json({ error: 'Invalid URL format' });
+    }
+
+    const youtubeUrl = isYouTubeUrl(url);
+
+    // Try to discover RSS feed first (including YouTube when available)
+    const rssUrl = await discoverRssFeed(url);
+
+    if (rssUrl) {
+      try {
+        const feed = await fetchAndParseRss(rssUrl, { since });
+        return res.json({
+          source: 'discovered',
+          feedUrl: rssUrl,
+          feed
+        });
+      } catch (rssError) {
+        if (!youtubeUrl) {
+          throw rssError;
+        }
+
+        logger.warn('Direct YouTube RSS fetch failed; falling back to YouTube API', {
+          url,
+          rssUrl,
+          error: rssError.message
+        });
+      }
+    }
+
+    if (youtubeUrl) {
+      try {
+        const { feedUrl, feed } = await buildYouTubeFeedFromUrl(url, { since });
+        return res.json({
+          source: 'discovered',
+          feedUrl,
+          feed
+        });
+      } catch (error) {
+        if (
+          error instanceof YouTubeFeedError ||
+          (typeof error?.statusCode === 'number' && typeof error?.code === 'string')
+        ) {
+          return res.status(error.statusCode || 502).json({
+            error: error.message,
+            code: error.code
+          });
+        }
+
+        throw error;
+      }
+    }
+
+    // No RSS feed found, scrape the website and generate one
+    const scrapedData = await scrapeWebsite(url);
+    const generatedFeed = generateRssFeed(url, scrapedData);
+    const rssJson = await parseStringPromise(generatedFeed.xml, { explicitArray: false });
+
+    return res.json({
+      source: 'generated',
+      feedUrl: null,
+      feed: generatedFeed.json,
+      rss: rssJson
+    });
+
+  } catch (error) {
+    logger.error('Error processing RSS request', { url: req.body?.url, error });
+    res.status(500).json({
+      error: 'Failed to process request',
+      message: error.message
+    });
+  }
+});
+
+export default router;
