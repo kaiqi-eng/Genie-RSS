@@ -171,12 +171,82 @@ export const linkedInProfileSchema = z.object({
 /**
  * POST /api/linkedin/topic-posts
  */
+/**
+ * POST /api/linkedin/topic-posts
+ */
 export const linkedInTopicSchema = z.object({
-  topic: z.string()
-    .min(2, 'Topic must be at least 2 characters')
-    .max(100, 'Topic must be at most 100 characters')
-    .trim(),
-  maxPosts: z.number().int().min(1).max(20).optional().default(10),
+  authorUrls: z.array(
+    z.string().url({ message: 'Invalid author URL format' })
+  )
+    .optional()
+    .transform(value => value?.length ? value : undefined),
+
+  authorsCompanies: z.array(
+    z.string()
+      .trim()
+      .min(1, 'Company name cannot be empty')
+  )
+    .optional()
+    .transform(value => value?.length ? value : undefined),
+
+  contentType: z.enum(
+    ['all', 'posts', 'articles'],
+    {
+      errorMap: () => ({
+        message: 'contentType must be one of: all, posts, articles'
+      })
+    }
+  )
+    .optional()
+    .default('all'),
+
+  maxPosts: z.number()
+    .int()
+    .min(1, 'maxPosts must be at least 1')
+    .max(20, 'maxPosts cannot exceed 20')
+    .optional()
+    .default(20),
+
+  maxReactions: z.number()
+    .int()
+    .min(0, 'maxReactions cannot be negative')
+    .optional()
+    .default(5),
+
+  postNestedComments: z.boolean()
+    .optional()
+    .default(false),
+
+  postNestedReactions: z.boolean()
+    .optional()
+    .default(false),
+
+  scrapeComments: z.boolean()
+    .optional()
+    .default(false),
+
+  scrapeReactions: z.boolean()
+    .optional()
+    .default(false),
+
+  searchQueries: z.array(
+    z.string()
+      .trim()
+      .min(1, 'Search query cannot be empty')
+  )
+    .min(1, 'At least one search query is required')
+}).transform(data => {
+  const result = { ...data };
+
+  if (!result.authorUrls?.length) {
+    delete result.authorUrls;
+  }
+
+  if (!result.authorsCompanies?.length) {
+    delete result.authorsCompanies;
+  }
+
+  return result;
 });
 
 /**
