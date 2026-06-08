@@ -13,7 +13,7 @@ const logger = createLogger('routes:linkedin');
  *     summary: Get latest posts from a LinkedIn profile
  *     description: >
  *       Fetches the most recent posts from a public LinkedIn profile.
- *       Requires a valid ScrapingBee API key (`SCRAPINGBEE_API_KEY`) to bypass
+ *       Requires a valid APIFY ACTOR token to bypass
  *       LinkedIn's bot protection. Only public profile activity is accessible.
  *     tags: [LinkedIn]
  *     requestBody:
@@ -74,7 +74,7 @@ const logger = createLogger('routes:linkedin');
  *       401:
  *         description: Missing or invalid API key
  *       500:
- *         description: Server error or ScrapingBee misconfiguration
+ *         description: Server error or APIFY ACTOR  misconfiguration
  */
 router.post('/profile-posts', validateLinkedInProfile, async (req, res) => {
   const { profileUrl, maxPosts = 10 } = req.body;
