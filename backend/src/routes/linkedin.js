@@ -28,53 +28,21 @@ const logger = createLogger('routes:linkedin');
  *               profileUrl:
  *                 type: string
  *                 format: uri
- *                 description: Full LinkedIn profile URL
- *                 example: "https://www.linkedin.com/in/satyanadella/"
+ *                 example: https://www.linkedin.com/in/satyanadella/
  *               maxPosts:
  *                 type: integer
  *                 minimum: 1
  *                 maximum: 20
  *                 default: 10
- *                 description: Maximum number of posts to return
  *     responses:
  *       200:
  *         description: Posts retrieved successfully
- *         content:
- *           application/json:
- *             schema:
- *               type: object
- *               properties:
- *                 success:
- *                   type: boolean
- *                 data:
- *                   type: object
- *                   properties:
- *                     source:
- *                       type: string
- *                       example: profile
- *                     profileUrl:
- *                       type: string
- *                     name:
- *                       type: string
- *                     headline:
- *                       type: string
- *                     posts:
- *                       type: array
- *                       items:
- *                         $ref: '#/components/schemas/LinkedInPost'
- *                     fetchedAt:
- *                       type: string
- *                       format: date-time
  *       400:
  *         description: Invalid request body
- *         content:
- *           application/json:
- *             schema:
- *               $ref: '#/components/schemas/Error'
  *       401:
  *         description: Missing or invalid API key
  *       500:
- *         description: Server error or APIFY ACTOR  misconfiguration
+ *         description: Server error
  */
 router.post('/profile-posts', validateLinkedInProfile, async (req, res) => {
   const { profileUrl, maxPosts = 10 } = req.body;
@@ -87,7 +55,11 @@ router.post('/profile-posts', validateLinkedInProfile, async (req, res) => {
       data,
     });
   } catch (error) {
-    logger.error('Failed to fetch LinkedIn profile posts', { profileUrl, error });
+    logger.error('Failed to fetch LinkedIn profile posts', {
+      profileUrl,
+      error,
+    });
+
     return res.status(500).json({
       success: false,
       error: error.message || 'Failed to fetch LinkedIn profile posts',
@@ -99,12 +71,11 @@ router.post('/profile-posts', validateLinkedInProfile, async (req, res) => {
  * @swagger
  * /linkedin/topic-posts:
  *   post:
- *     summary: Get latest LinkedIn posts for a topic or keyword
+ *     summary: Search LinkedIn posts using keywords, authors, and companies
  *     description: >
- *       Searches LinkedIn for the most recent posts matching a given topic or keyword
- *       (e.g. "artificial intelligence", "finance", "startups").
- *       Uses LinkedIn's content search sorted by most recent.
- *       Requires `SCRAPINGBEE_API_KEY`.
+ *       Searches LinkedIn content using one or more search queries.
+ *       Optional author URLs and company names can be provided to narrow results.
+ *       Requires APIFY credentials.
  *     tags: [LinkedIn]
  *     requestBody:
  *       required: true
@@ -113,70 +84,90 @@ router.post('/profile-posts', validateLinkedInProfile, async (req, res) => {
  *           schema:
  *             type: object
  *             required:
- *               - topic
+ *               - searchQueries
  *             properties:
- *               topic:
+ *               authorUrls:
+ *                 type: array
+ *                 items:
+ *                   type: string
+ *                   format: uri
+ *                 example:
+ *                   - https://www.linkedin.com/in/satyanadella/
+ *
+ *               authorsCompanies:
+ *                 type: array
+ *                 items:
+ *                   type: string
+ *                 example:
+ *                   - Microsoft
+ *
+ *               searchQueries:
+ *                 type: array
+ *                 minItems: 1
+ *                 items:
+ *                   type: string
+ *                 example:
+ *                   - b2b sales
+ *                   - revenue operations
+ *
+ *               contentType:
  *                 type: string
- *                 minLength: 2
- *                 maxLength: 100
- *                 description: Topic or keyword to search for
- *                 example: "artificial intelligence"
+ *                 enum:
+ *                   - all
+ *                   - posts
+ *                   - articles
+ *                 default: all
+ *
  *               maxPosts:
  *                 type: integer
  *                 minimum: 1
  *                 maximum: 20
- *                 default: 10
- *                 description: Maximum number of posts to return
+ *                 default: 20
+ *
+ *               maxReactions:
+ *                 type: integer
+ *                 minimum: 0
+ *                 default: 5
+ *
+ *               postNestedComments:
+ *                 type: boolean
+ *                 default: false
+ *
+ *               postNestedReactions:
+ *                 type: boolean
+ *                 default: false
+ *
+ *               scrapeComments:
+ *                 type: boolean
+ *                 default: false
+ *
+ *               scrapeReactions:
+ *                 type: boolean
+ *                 default: false
  *     responses:
  *       200:
  *         description: Posts retrieved successfully
- *         content:
- *           application/json:
- *             schema:
- *               type: object
- *               properties:
- *                 success:
- *                   type: boolean
- *                 data:
- *                   type: object
- *                   properties:
- *                     source:
- *                       type: string
- *                       example: topic
- *                     topic:
- *                       type: string
- *                     searchUrl:
- *                       type: string
- *                     posts:
- *                       type: array
- *                       items:
- *                         $ref: '#/components/schemas/LinkedInPost'
- *                     fetchedAt:
- *                       type: string
- *                       format: date-time
  *       400:
  *         description: Invalid request body
- *         content:
- *           application/json:
- *             schema:
- *               $ref: '#/components/schemas/Error'
  *       401:
  *         description: Missing or invalid API key
  *       500:
- *         description: Server error or ScrapingBee misconfiguration
+ *         description: Server error
  */
 router.post('/topic-posts', validateLinkedInTopic, async (req, res) => {
-  const { topic, maxPosts = 10 } = req.body;
-
   try {
-    const data = await fetchTopicPosts(topic, maxPosts);
+    const data = await fetchTopicPosts(req.body);
 
     return res.json({
       success: true,
       data,
     });
   } catch (error) {
-    logger.error('Failed to fetch LinkedIn topic posts', { topic, error });
+    logger.error('Failed to fetch LinkedIn topic posts', {
+      payload: req.body,
+      error,
+    });
+
     return res.status(500).json({
       success: false,
       error: error.message || 'Failed to fetch LinkedIn topic posts',
