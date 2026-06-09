@@ -27,3 +27,8 @@ Thumbs.db
 #keys
 cert.pem
 key.pem
+
+# Beads / Dolt files (added by bd init)
+.dolt/
+*.db
+.beads-credential-key

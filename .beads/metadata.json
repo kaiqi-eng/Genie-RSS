@@ -1,4 +1,7 @@
 {
-  "database": "beads.db",
-  "jsonl_export": "issues.jsonl"
+  "database": "dolt",
+  "backend": "dolt",
+  "dolt_mode": "embedded",
+  "dolt_database": "Genie_RSS",
+  "project_id": "e98dc024-4fae-4c91-bcf5-a4f060a2001d"
 }
