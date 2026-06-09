@@ -86,7 +86,7 @@ apiRouter.use("/summarize", apiKeyAuth, summarizeRoutes);
 apiRouter.use("/transcript", apiKeyAuth, transcriptRoutes);
 apiRouter.use("/intel", apiKeyAuth, intelRoutes);
 apiRouter.use("/youtube", apiKeyAuth, youtubeRoutes);
-apiRouter.use("/linkedin", apiKeyAuth, linkedinRoutes);
+apiRouter.use("/linkedin", linkedinRoutes);
 apiRouter.use((req, res) => {
   return res.status(404).json({
     success: false,
