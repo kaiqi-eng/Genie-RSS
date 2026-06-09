@@ -4,20 +4,64 @@ import { credentials, timeouts, limits } from '../config/index.js';
 
 const logger = createLogger('services:linkedin');
 
+const DEFAULT_BUILDER_ID = 'linkedin-service';
+const DEFAULT_PROJECT_TAGS = ['linkedin'];
+const SOURCE_TYPE = 'linkedin';
+const CONTENT_TYPE = 'post';
+
+/**
+ * Convert LinkedIn post → required schema
+ */
+function mapToSchema(post, extraMetadata = {}) {
+  return {
+    title:
+      post.author && post.pubDate
+        ? `${post.author} - LinkedIn Post`
+        : 'LinkedIn Post',
+
+    content: (post.text || '').substring(
+      0,
+      limits.maxContentLength * 2
+    ),
+
+    source_type: SOURCE_TYPE,
+    content_type: CONTENT_TYPE,
+
+    source_id:
+      post.postUrl?.split('/').filter(Boolean).pop() ||
+      crypto.randomUUID(),
+
+    source_url: post.postUrl || '',
+
+    builder_id: DEFAULT_BUILDER_ID,
+
+    project_tags: DEFAULT_PROJECT_TAGS,
+
+    metadata: {
+      author: post.author || null,
+      pubDate: post.pubDate || null,
+      reactions: post.reactions || 0,
+      imageUrl: post.imageUrl || null,
+      ...extraMetadata,
+    },
+  };
+}
+
 // ─────────────────────────────────────────────
 // PROFILE POSTS
 // ─────────────────────────────────────────────
 
-/**
- * Fetch latest posts from a LinkedIn profile URL using Apify.
- * @param {string} profileUrl
- * @param {number} [maxPosts=10]
- */
-export async function fetchProfilePosts(profileUrl, maxPosts = 10) {
-  logger.info('Fetching LinkedIn profile posts via Apify', {
-    profileUrl,
-    maxPosts,
-  });
+export async function fetchProfilePosts(
+  profileUrl,
+  maxPosts = 10
+) {
+  logger.info(
+    'Fetching LinkedIn profile posts via Apify',
+    {
+      profileUrl,
+      maxPosts,
+    }
+  );
 
   try {
     const response = await axios.post(
@@ -34,71 +78,77 @@ export async function fetchProfilePosts(profileUrl, maxPosts = 10) {
     const items = response.data;
 
     if (!Array.isArray(items)) {
-      throw new Error('Invalid response format from Apify LinkedIn profile posts scraper');
+      throw new Error(
+        'Invalid response format from Apify LinkedIn profile posts scraper'
+      );
     }
 
-    const name =
-      items.length > 0 && items[0].author
-        ? `${items[0].author.first_name || ''} ${items[0].author.last_name || ''}`.trim() || null
-        : null;
-
-    const headline =
-      items.length > 0 && items[0].author
-        ? items[0].author.headline || null
-        : null;
-
-    const posts = items.map((item) => {
-      const postAuthor = item.author
-        ? `${item.author.first_name || ''} ${item.author.last_name || ''}`.trim() || null
+    const results = items.map((item) => {
+      const author = item.author
+        ? `${item.author.first_name || ''} ${
+            item.author.last_name || ''
+          }`.trim()
         : null;
 
       let pubDate = null;
+
       if (item.posted_at?.timestamp) {
-        pubDate = new Date(item.posted_at.timestamp).toISOString();
+        pubDate = new Date(
+          item.posted_at.timestamp
+        ).toISOString();
       } else if (item.posted_at?.date) {
-        pubDate = new Date(item.posted_at.date).toISOString();
+        pubDate = new Date(
+          item.posted_at.date
+        ).toISOString();
       }
 
-      return {
-        text: (item.text || '').substring(0, limits.maxContentLength * 2),
-        author: postAuthor,
+      const post = {
+        text: item.text || '',
+        author,
         pubDate,
-        reactions: item.stats?.total_reactions || null,
-        postUrl: item.url || null,
-        imageUrl: item.media?.url || item.media?.thumbnail || null,
+        reactions:
+          item.stats?.total_reactions || 0,
+        postUrl: item.url || '',
+        imageUrl:
+          item.media?.url ||
+          item.media?.thumbnail ||
+          null,
       };
+
+      return mapToSchema(post, {
+        profileUrl,
+        source: 'profile',
+        headline:
+          item.author?.headline || null,
+      });
     });
 
-    logger.info('LinkedIn profile posts fetched successfully', {
-      profileUrl,
-      postCount: posts.length,
-    });
+    logger.info(
+      'LinkedIn profile posts fetched successfully',
+      {
+        profileUrl,
+        postCount: results.length,
+      }
+    );
 
-    return {
-      source: 'profile',
-      profileUrl,
-      name,
-      headline,
-      posts,
-      fetchedAt: new Date().toISOString(),
-    };
+    return results;
   } catch (error) {
-    logger.error('Error fetching LinkedIn profile posts via Apify', {
-      profileUrl,
-      error,
-    });
+    logger.error(
+      'Error fetching LinkedIn profile posts via Apify',
+      {
+        profileUrl,
+        error,
+      }
+    );
+
     throw error;
   }
 }
 
 // ─────────────────────────────────────────────
-// TOPIC POSTS (UPDATED)
+// TOPIC POSTS
 // ─────────────────────────────────────────────
 
-/**
- * Fetch LinkedIn posts using advanced topic search payload.
- * @param {object} payload
- */
 export async function fetchTopicPosts(payload) {
   const {
     authorUrls,
@@ -113,10 +163,13 @@ export async function fetchTopicPosts(payload) {
     searchQueries,
   } = payload;
 
-  logger.info('Fetching LinkedIn topic posts via Apify', {
-    searchQueries,
-    maxPosts,
-  });
+  logger.info(
+    'Fetching LinkedIn topic posts via Apify',
+    {
+      searchQueries,
+      maxPosts,
+    }
+  );
 
   const searchUrl = `https://www.linkedin.com/search/results/content/?keywords=${encodeURIComponent(
     searchQueries.join(' ')
@@ -128,8 +181,13 @@ export async function fetchTopicPosts(payload) {
       {
         searchQueries,
 
-        ...(authorUrls?.length ? { authorUrls } : {}),
-        ...(authorsCompanies?.length ? { authorsCompanies } : {}),
+        ...(authorUrls?.length
+          ? { authorUrls }
+          : {}),
+
+        ...(authorsCompanies?.length
+          ? { authorsCompanies }
+          : {}),
 
         contentType,
         maxPosts,
@@ -140,53 +198,74 @@ export async function fetchTopicPosts(payload) {
         scrapeReactions,
       },
       {
-        timeout: timeouts.scrapingBee || 30000,
+        timeout:
+          timeouts.scrapingBee || 30000,
       }
     );
 
     const items = response.data;
 
     if (!Array.isArray(items)) {
-      throw new Error('Invalid response format from Apify post search scraper');
+      throw new Error(
+        'Invalid response format from Apify post search scraper'
+      );
     }
 
-    const posts = items.map((item) => {
-      const authorName = item.author?.name || null;
-
+    const results = items.map((item) => {
       let pubDate = null;
+
       if (item.postedAt?.timestamp) {
-        pubDate = new Date(item.postedAt.timestamp).toISOString();
+        pubDate = new Date(
+          item.postedAt.timestamp
+        ).toISOString();
       } else if (item.postedAt?.date) {
-        pubDate = new Date(item.postedAt.date).toISOString();
+        pubDate = new Date(
+          item.postedAt.date
+        ).toISOString();
       }
 
-      return {
-        text: (item.content || '').substring(0, limits.maxContentLength * 2),
-        author: authorName,
+      const post = {
+        text: item.content || '',
+        author:
+          item.author?.name || null,
         pubDate,
-        reactions: item.engagement?.likes || null,
-        postUrl: item.linkedinUrl || item.shareLinkedinUrl || null,
-        imageUrl: item.article?.image?.url || item.postImages?.[0]?.url || null,
+        reactions:
+          item.engagement?.likes || 0,
+        postUrl:
+          item.linkedinUrl ||
+          item.shareLinkedinUrl ||
+          '',
+        imageUrl:
+          item.article?.image?.url ||
+          item.postImages?.[0]?.url ||
+          null,
       };
+
+      return mapToSchema(post, {
+        source: 'topic',
+        searchQueries,
+        searchUrl,
+      });
     });
 
-    logger.info('LinkedIn topic posts fetched successfully', {
-      searchQueries,
-      postCount: posts.length,
-    });
+    logger.info(
+      'LinkedIn topic posts fetched successfully',
+      {
+        searchQueries,
+        postCount: results.length,
+      }
+    );
 
-    return {
-      source: 'topic',
-      searchQueries,
-      searchUrl,
-      posts,
-      fetchedAt: new Date().toISOString(),
-    };
+    return results;
   } catch (error) {
-    logger.error('Error fetching LinkedIn topic posts via Apify', {
-      searchQueries,
-      error,
-    });
+    logger.error(
+      'Error fetching LinkedIn topic posts via Apify',
+      {
+        searchQueries,
+        error,
+      }
+    );
+
     throw error;
   }
 }
