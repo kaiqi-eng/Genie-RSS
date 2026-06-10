@@ -156,6 +156,100 @@ export const dailyIntelSchema = z.object({
 });
 
 /**
+ * POST /api/linkedin/profile-posts
+ */
+export const linkedInProfileSchema = z.object({
+  profileUrl: z.string()
+    .url({ message: 'Invalid URL format' })
+    .refine(
+      (url) => url.includes('linkedin.com/in/') || url.includes('linkedin.com/company/'),
+      { message: 'URL must be a LinkedIn profile or company page (linkedin.com/in/ or linkedin.com/company/)' }
+    ),
+  maxPosts: z.number().int().min(1).max(20).optional().default(10),
+});
+
+/**
+ * POST /api/linkedin/topic-posts
+ */
+/**
+ * POST /api/linkedin/topic-posts
+ */
+export const linkedInTopicSchema = z.object({
+  authorUrls: z.array(
+    z.string().url({ message: 'Invalid author URL format' })
+  )
+    .optional()
+    .transform(value => value?.length ? value : undefined),
+
+  authorsCompanies: z.array(
+    z.string()
+      .trim()
+      .min(1, 'Company name cannot be empty')
+  )
+    .optional()
+    .transform(value => value?.length ? value : undefined),
+
+  contentType: z.enum(
+    ['all', 'posts', 'articles'],
+    {
+      errorMap: () => ({
+        message: 'contentType must be one of: all, posts, articles'
+      })
+    }
+  )
+    .optional()
+    .default('all'),
+
+  maxPosts: z.number()
+    .int()
+    .min(1, 'maxPosts must be at least 1')
+    .max(20, 'maxPosts cannot exceed 20')
+    .optional()
+    .default(20),
+
+  maxReactions: z.number()
+    .int()
+    .min(0, 'maxReactions cannot be negative')
+    .optional()
+    .default(5),
+
+  postNestedComments: z.boolean()
+    .optional()
+    .default(false),
+
+  postNestedReactions: z.boolean()
+    .optional()
+    .default(false),
+
+  scrapeComments: z.boolean()
+    .optional()
+    .default(false),
+
+  scrapeReactions: z.boolean()
+    .optional()
+    .default(false),
+
+  searchQueries: z.array(
+    z.string()
+      .trim()
+      .min(1, 'Search query cannot be empty')
+  )
+    .min(1, 'At least one search query is required')
+}).transform(data => {
+  const result = { ...data };
+
+  if (!result.authorUrls?.length) {
+    delete result.authorUrls;
+  }
+
+  if (!result.authorsCompanies?.length) {
+    delete result.authorsCompanies;
+  }
+
+  return result;
+});
+
+/**
  * POST /api/youtube/resolve-channels
  */
 export const youtubeChannelLookupSchema = z.object({
@@ -176,6 +270,8 @@ export const validateSummarize = validate(summarizeSchema);
 export const validateTranscriptSummarize = validate(transcriptSummarizeSchema);
 export const validateIntelUrls = validate(intelUrlsSchema);
 export const validateDailyIntel = validate(dailyIntelSchema);
+export const validateLinkedInProfile = validate(linkedInProfileSchema);
+export const validateLinkedInTopic = validate(linkedInTopicSchema);
 export const validateYoutubeChannelLookup = validate(youtubeChannelLookupSchema);
 
 // Export schemas for testing
@@ -186,5 +282,7 @@ export const schemas = {
   transcriptSummarize: transcriptSummarizeSchema,
   intelUrls: intelUrlsSchema,
   dailyIntel: dailyIntelSchema,
-  youtubeChannelLookup: youtubeChannelLookupSchema
+  youtubeChannelLookup: youtubeChannelLookupSchema,
+  linkedInProfile: linkedInProfileSchema,
+  linkedInTopic: linkedInTopicSchema,
 };

@@ -54,6 +54,17 @@ const options = {
             },
           },
         },
+        LinkedInPost: {
+          type: 'object',
+          properties: {
+            text: { type: 'string', description: 'Post text content' },
+            author: { type: 'string', description: 'Author display name', nullable: true },
+            pubDate: { type: 'string', format: 'date-time', nullable: true },
+            reactions: { type: 'integer', description: 'Number of reactions', nullable: true },
+            postUrl: { type: 'string', format: 'uri', nullable: true },
+            imageUrl: { type: 'string', format: 'uri', nullable: true },
+          },
+        },
         FeedItem: {
           type: 'object',
           properties: {

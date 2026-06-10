@@ -16,6 +16,7 @@ import summarizeRoutes from "./routes/summarize.js";
 import transcriptRoutes from "./routes/transcripts.js";
 import intelRoutes from "./routes/intel.js";
 import youtubeRoutes from "./routes/youtube.js";
+import linkedinRoutes from "./routes/linkedin.js";
 import { createLogger } from './utils/logger.js';
 
 dotenv.config();
@@ -85,6 +86,7 @@ apiRouter.use("/summarize", apiKeyAuth, summarizeRoutes);
 apiRouter.use("/transcript", apiKeyAuth, transcriptRoutes);
 apiRouter.use("/intel", apiKeyAuth, intelRoutes);
 apiRouter.use("/youtube", apiKeyAuth, youtubeRoutes);
+apiRouter.use("/linkedin", linkedinRoutes);
 apiRouter.use((req, res) => {
   return res.status(404).json({
     success: false,
