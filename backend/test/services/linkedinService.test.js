@@ -68,23 +68,27 @@ describe('LinkedIn Service', () => {
         expect.any(Object)
       );
 
-      expect(result).toEqual({
-        source: 'profile',
-        profileUrl: 'https://www.linkedin.com/in/satyanadella',
-        name: 'Satya Nadella',
-        headline: 'Chairman and CEO at Microsoft',
-        posts: [
-          {
-            text: 'So many updates this month.',
+      expect(result).toEqual([
+        {
+          title: 'Satya Nadella - LinkedIn Post',
+          content: 'So many updates this month.',
+          source_type: 'linkedin',
+          content_type: 'post',
+          source_id: 'satyanadella_so-many-updates-activity-123',
+          source_url: 'https://www.linkedin.com/posts/satyanadella_so-many-updates-activity-123',
+          builder_id: 'linkedin-service',
+          project_tags: ['linkedin'],
+          metadata: {
             author: 'Satya Nadella',
             pubDate: '2025-10-24T17:56:04.096Z',
             reactions: 9531,
-            postUrl: 'https://www.linkedin.com/posts/satyanadella_so-many-updates-activity-123',
             imageUrl: 'https://media.com/video.mp4',
-          }
-        ],
-        fetchedAt: expect.any(String),
-      });
+            profileUrl: 'https://www.linkedin.com/in/satyanadella',
+            source: 'profile',
+            headline: 'Chairman and CEO at Microsoft',
+          },
+        }
+      ]);
     });
 
     it('handles empty results from Apify', async () => {
@@ -92,14 +96,7 @@ describe('LinkedIn Service', () => {
 
       const result = await fetchProfilePosts('https://www.linkedin.com/in/satyanadella', 5);
 
-      expect(result).toEqual({
-        source: 'profile',
-        profileUrl: 'https://www.linkedin.com/in/satyanadella',
-        name: null,
-        headline: null,
-        posts: [],
-        fetchedAt: expect.any(String),
-      });
+      expect(result).toEqual([]);
     });
 
     it('throws error on invalid response format', async () => {
@@ -114,40 +111,51 @@ describe('LinkedIn Service', () => {
     it('successfully fetches and maps topic posts', async () => {
       axios.post.mockResolvedValue({ data: mockTopicData });
 
-      const result = await fetchTopicPosts('artificial intelligence', 5);
+      const result = await fetchTopicPosts({
+        searchQueries: ['artificial intelligence'],
+        maxPosts: 5,
+      });
 
       expect(axios.post).toHaveBeenCalledWith(
         expect.stringContaining('harvestapi~linkedin-post-search/run-sync-get-dataset-items'),
-        {
+        expect.objectContaining({
           searchQueries: ['artificial intelligence'],
           maxPosts: 5,
-        },
+        }),
         expect.any(Object)
       );
 
-      expect(result).toEqual({
-        source: 'topic',
-        topic: 'artificial intelligence',
-        searchUrl: 'https://www.linkedin.com/search/results/content/?keywords=artificial%20intelligence&sortBy=date_posted',
-        posts: [
-          {
-            text: 'AI is no longer just a tool.',
+      expect(result).toEqual([
+        {
+          title: 'Paul Chernin - LinkedIn Post',
+          content: 'AI is no longer just a tool.',
+          source_type: 'linkedin',
+          content_type: 'post',
+          source_id: 'pchernin_ai-intelligence-activity-7468299189119156224',
+          source_url: 'https://www.linkedin.com/posts/pchernin_ai-intelligence-activity-7468299189119156224',
+          builder_id: 'linkedin-service',
+          project_tags: ['linkedin'],
+          metadata: {
             author: 'Paul Chernin',
             pubDate: '2026-06-04T13:54:40.975Z',
             reactions: 4,
-            postUrl: 'https://www.linkedin.com/posts/pchernin_ai-intelligence-activity-7468299189119156224',
             imageUrl: 'https://media.com/image.jpg',
-          }
-        ],
-        fetchedAt: expect.any(String),
-      });
+            source: 'topic',
+            searchQueries: ['artificial intelligence'],
+            searchUrl: 'https://www.linkedin.com/search/results/content/?keywords=artificial%20intelligence&sortBy=date_posted',
+          },
+        }
+      ]);
     });
 
     it('throws error on invalid response format', async () => {
       axios.post.mockResolvedValue({ data: null });
 
-      await expect(fetchTopicPosts('artificial intelligence', 5))
-        .rejects.toThrow('Invalid response format from Apify LinkedIn post search scraper');
+      await expect(fetchTopicPosts({
+        searchQueries: ['artificial intelligence'],
+        maxPosts: 5,
+      }))
+        .rejects.toThrow('Invalid response format from Apify post search scraper');
     });
   });
 });

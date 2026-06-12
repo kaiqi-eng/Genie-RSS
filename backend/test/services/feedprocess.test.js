@@ -1,5 +1,6 @@
 import { describe, it, expect, beforeEach, jest } from "@jest/globals";
 import zlib from "zlib";
+import crypto from "crypto";
 
 const mockAxiosGet = jest.fn();
 const mockImapConnect = jest.fn();
@@ -55,6 +56,12 @@ describe("Feed Process Service", () => {
     expect(items[0].title).toBe("Item One");
     expect(items[0].url).toBe("https://example.com/item-1");
     expect(items[0].source).toBe("https://example.com/feed.xml");
+    expect(items[0].id).toBe(
+      crypto
+        .createHash("md5")
+        .update("Item Onehttps://example.com/item-1Mon, 01 Jan 2026 00:00:00 GMTHello world")
+        .digest("hex")
+    );
   });
 
   it("fetchDirect handles gzipped responses", async () => {

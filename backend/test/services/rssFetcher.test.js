@@ -1,16 +1,54 @@
-import { describe, it, expect, beforeEach } from '@jest/globals';
-import {
+import { describe, it, expect, beforeEach, jest } from '@jest/globals';
+import crypto from 'crypto';
+
+const mockParseURL = jest.fn();
+
+jest.unstable_mockModule('rss-parser', () => ({
+  default: jest.fn().mockImplementation(() => ({
+    parseURL: mockParseURL
+  }))
+}));
+
+// Import everything dynamically AFTER mock is registered so the mock is
+// in place when rssFetcher.js first loads and creates the Parser instance.
+const {
+  fetchAndParseRss,
   invalidateFeedCache,
   invalidateAllFeedCache,
   getFeedCacheStats,
   isFeedCached,
   getFeedCacheTtl
-} from '../../src/services/rssFetcher.js';
+} = await import('../../src/services/rssFetcher.js');
 
 describe('RSS Feed Cache', () => {
   beforeEach(() => {
-    // Clear cache before each test
+    mockParseURL.mockReset();
     invalidateAllFeedCache();
+  });
+
+  it('uses md5 item IDs based on the fetched item data', async () => {
+    mockParseURL.mockResolvedValueOnce({
+      title: 'Example Feed',
+      items: [
+        {
+          title: 'Item One',
+          link: 'https://example.com/item-1',
+          pubDate: 'Mon, 01 Jan 2026 00:00:00 GMT',
+          content: 'Item body'
+        }
+      ]
+    });
+
+    const result = await fetchAndParseRss('https://example.com/feed.xml');
+
+    expect(result.items).toHaveLength(1);
+    expect(result.items[0].id).toBe(
+      crypto
+        .createHash('md5')
+        .update('Item Onehttps://example.com/item-1Mon, 01 Jan 2026 00:00:00 GMTItem body')
+        .digest('hex')
+    );
+    expect(result.items[0].guid).toBe(result.items[0].id);
   });
 
   describe('Cache Statistics', () => {
