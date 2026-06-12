@@ -1,6 +1,7 @@
 import Parser from 'rss-parser';
 import axios from 'axios';
 import NodeCache from 'node-cache';
+import crypto from 'crypto';
 import { createLogger } from '../utils/logger.js';
 import { cache, timeouts } from '../config/index.js';
 
@@ -66,15 +67,23 @@ export async function fetchAndParseRss(feedUrl, options = {}) {
 
     const mappedItems = (feed.items || []).map(item => {
       const content = extractContent(item);
+      const title = item.title || 'Untitled';
+      const link = item.link || '';
+      const pubDate = item.pubDate || item.isoDate || null;
+      const id = crypto
+        .createHash('md5')
+        .update(`${title}${link}${pubDate || ''}${content}`)
+        .digest('hex');
       return {
-        title: item.title || 'Untitled',
-        link: item.link || '',
-        pubDate: item.pubDate || item.isoDate || null,
+        id,
+        title,
+        link,
+        pubDate,
         creator: item.creator || item.author || '',
         content,
         contentSnippet: item.contentSnippet || content.substring(0, 200),
         categories: item.categories || [],
-        guid: item.guid || item.id || item.link,
+        guid: id,
         thumbnail: extractThumbnail(item)
       };
     });

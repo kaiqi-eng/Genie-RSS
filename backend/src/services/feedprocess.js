@@ -64,7 +64,7 @@ export const parseRSS = async (xml, source = "unknown", tier = "direct") => {
 
       if (title && link) {
         items.push({
-          id: hashId(link, published),
+          id: hashId(title, link, published, String(description).slice(0, 4000)),
           title: title.slice(0, 200),
           url: link,
           content: String(description).slice(0, 4000),
