@@ -51,24 +51,39 @@ function mapToSchema(post, extraMetadata = {}) {
 // PROFILE POSTS
 // ─────────────────────────────────────────────
 
+function normalizeMaxPosts(value, fallback) {
+  const parsed = Number(value);
+  if (!Number.isInteger(parsed) || parsed < 1) {
+    return fallback;
+  }
+  return parsed;
+}
+
 export async function fetchProfilePosts(
   profileUrl,
   maxPosts = 10
 ) {
+  const postLimit = normalizeMaxPosts(maxPosts, 10);
+
   logger.info(
     'Fetching LinkedIn profile posts via Apify',
     {
       profileUrl,
-      maxPosts,
+      maxPosts: postLimit,
     }
   );
 
   try {
+    // apimaestro/linkedin-profile-posts expects `limit` / `total_posts`,
+    // not `maxPosts`. Keep `urls` for compatibility with current actor runs.
     const response = await axios.post(
       `https://api.apify.com/v2/actors/apimaestro~linkedin-profile-posts/run-sync-get-dataset-items?token=${credentials.apifyToken}`,
       {
         urls: [profileUrl],
-        maxPosts,
+        username: profileUrl,
+        page_number: 1,
+        limit: Math.min(postLimit, 100),
+        total_posts: postLimit,
       },
       {
         timeout: timeouts.scrapingBee || 30000,
@@ -83,7 +98,9 @@ export async function fetchProfilePosts(
       );
     }
 
-    const results = items.map((item) => {
+    const results = items
+      .slice(0, postLimit)
+      .map((item) => {
       const author = item.author
         ? `${item.author.first_name || ''} ${
             item.author.last_name || ''
@@ -128,6 +145,8 @@ export async function fetchProfilePosts(
       {
         profileUrl,
         postCount: results.length,
+        requestedMaxPosts: postLimit,
+        rawItemCount: items.length,
       }
     );
 
@@ -163,11 +182,13 @@ export async function fetchTopicPosts(payload) {
     searchQueries,
   } = payload;
 
+  const postLimit = normalizeMaxPosts(maxPosts, 20);
+
   logger.info(
     'Fetching LinkedIn topic posts via Apify',
     {
       searchQueries,
-      maxPosts,
+      maxPosts: postLimit,
     }
   );
 
@@ -190,7 +211,7 @@ export async function fetchTopicPosts(payload) {
           : {}),
 
         contentType,
-        maxPosts,
+        maxPosts: postLimit,
         maxReactions,
         postNestedComments,
         postNestedReactions,
@@ -211,7 +232,9 @@ export async function fetchTopicPosts(payload) {
       );
     }
 
-    const results = items.map((item) => {
+    const results = items
+      .slice(0, postLimit)
+      .map((item) => {
       let pubDate = null;
 
       if (item.postedAt?.timestamp) {
@@ -253,6 +276,8 @@ export async function fetchTopicPosts(payload) {
       {
         searchQueries,
         postCount: results.length,
+        requestedMaxPosts: postLimit,
+        rawItemCount: items.length,
       }
     );
 
