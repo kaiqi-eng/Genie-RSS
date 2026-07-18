@@ -63,7 +63,10 @@ describe('LinkedIn Service', () => {
         expect.stringContaining('apimaestro~linkedin-profile-posts/run-sync-get-dataset-items'),
         {
           urls: ['https://www.linkedin.com/in/satyanadella'],
-          maxPosts: 5,
+          username: 'https://www.linkedin.com/in/satyanadella',
+          page_number: 1,
+          limit: 5,
+          total_posts: 5,
         },
         expect.any(Object)
       );
@@ -97,6 +100,22 @@ describe('LinkedIn Service', () => {
       const result = await fetchProfilePosts('https://www.linkedin.com/in/satyanadella', 5);
 
       expect(result).toEqual([]);
+    });
+
+    it('caps profile results to maxPosts even if Apify returns more', async () => {
+      axios.post.mockResolvedValue({
+        data: [
+          { ...mockProfileData[0], url: 'https://www.linkedin.com/posts/a-1' },
+          { ...mockProfileData[0], url: 'https://www.linkedin.com/posts/a-2' },
+          { ...mockProfileData[0], url: 'https://www.linkedin.com/posts/a-3' },
+        ],
+      });
+
+      const result = await fetchProfilePosts('https://www.linkedin.com/in/satyanadella', 2);
+
+      expect(result).toHaveLength(2);
+      expect(result[0].source_url).toBe('https://www.linkedin.com/posts/a-1');
+      expect(result[1].source_url).toBe('https://www.linkedin.com/posts/a-2');
     });
 
     it('throws error on invalid response format', async () => {
@@ -146,6 +165,25 @@ describe('LinkedIn Service', () => {
           },
         }
       ]);
+    });
+
+    it('caps topic results to maxPosts even if Apify returns more', async () => {
+      axios.post.mockResolvedValue({
+        data: [
+          { ...mockTopicData[0], linkedinUrl: 'https://www.linkedin.com/posts/t-1' },
+          { ...mockTopicData[0], linkedinUrl: 'https://www.linkedin.com/posts/t-2' },
+          { ...mockTopicData[0], linkedinUrl: 'https://www.linkedin.com/posts/t-3' },
+        ],
+      });
+
+      const result = await fetchTopicPosts({
+        searchQueries: ['artificial intelligence'],
+        maxPosts: 2,
+      });
+
+      expect(result).toHaveLength(2);
+      expect(result[0].source_url).toBe('https://www.linkedin.com/posts/t-1');
+      expect(result[1].source_url).toBe('https://www.linkedin.com/posts/t-2');
     });
 
     it('throws error on invalid response format', async () => {
