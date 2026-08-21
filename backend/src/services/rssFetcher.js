@@ -1,10 +1,13 @@
 import Parser from 'rss-parser';
 import axios from 'axios';
 import NodeCache from 'node-cache';
+import * as cheerio from 'cheerio';
 import { createLogger } from '../utils/logger.js';
 import { cache, timeouts } from '../config/index.js';
 
 const logger = createLogger('services:rssFetcher');
+const MINIMUM_CONTENT_LENGTH = 10;
+const ARTICLE_EXTRACTION_METHOD = 'json-ld.articleBody > cnbc-article-body-selector > metadata-description';
 
 // Initialize cache with centralized config
 const feedCache = new NodeCache({
@@ -64,20 +67,49 @@ export async function fetchAndParseRss(feedUrl, options = {}) {
   try {
     const feed = await parseFeedWithFallback(feedUrl);
 
-    const mappedItems = (feed.items || []).map(item => {
-      const content = extractContent(item);
-      return {
+    const mappedResults = await Promise.all((feed.items || []).map(async item => {
+      const feedContent = extractContent(item);
+      const baseItem = {
         title: item.title || 'Untitled',
         link: item.link || '',
         pubDate: item.pubDate || item.isoDate || null,
         creator: item.creator || item.author || '',
-        content,
-        contentSnippet: item.contentSnippet || content.substring(0, 200),
         categories: item.categories || [],
         guid: item.guid || item.id || item.link,
         thumbnail: extractThumbnail(item)
       };
-    });
+
+      if (hasSufficientContent(feedContent)) {
+        return {
+          item: {
+            ...baseItem,
+            content: feedContent,
+            contentSnippet: item.contentSnippet || feedContent.substring(0, 200)
+          }
+        };
+      }
+
+      const enrichment = await enrichLinkOnlyItem(baseItem);
+      if (enrichment.failure) {
+        return { failure: enrichment.failure };
+      }
+
+      return {
+        item: {
+          ...baseItem,
+          content: enrichment.content,
+          contentSnippet: enrichment.content.substring(0, 200),
+          extractionMethod: enrichment.method
+        }
+      };
+    }));
+
+    const mappedItems = mappedResults
+      .filter(result => result.item)
+      .map(result => result.item);
+    const itemFailures = mappedResults
+      .filter(result => result.failure)
+      .map(result => result.failure);
 
     const items = sinceTimestamp === null
       ? mappedItems
@@ -95,6 +127,7 @@ export async function fetchAndParseRss(feedUrl, options = {}) {
       language: feed.language || 'en',
       lastBuildDate: feed.lastBuildDate || null,
       items,
+      itemFailures,
       _fetchedAt: new Date().toISOString()
     };
 
@@ -175,13 +208,142 @@ function extractThumbnail(item) {
 }
 
 function extractContent(item) {
-  return (
+  return cleanText(
     item.contentEncoded ||
     item.content ||
     extractMediaDescription(item) ||
     item.contentSnippet ||
     ''
   );
+}
+
+async function enrichLinkOnlyItem(item) {
+  const diagnostics = {
+    guid: item.guid || null,
+    url: item.link || null,
+    httpStatus: null,
+    extractionMethod: ARTICLE_EXTRACTION_METHOD,
+    responseBodySize: 0,
+    extractedContentLength: 0
+  };
+
+  if (!item.link) {
+    return {
+      failure: {
+        ...diagnostics,
+        reason: 'RSS item has insufficient content and no article URL to enrich.'
+      }
+    };
+  }
+
+  try {
+    const response = await axios.get(item.link, {
+      timeout: timeouts.rssFetch,
+      responseType: 'text',
+      maxRedirects: 5,
+      headers: {
+        'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0 Safari/537.36',
+        Accept: 'text/html,application/xhtml+xml,application/xml;q=0.9,*/*;q=0.8'
+      }
+    });
+    const html = typeof response.data === 'string' ? response.data : String(response.data || '');
+    diagnostics.httpStatus = response.status;
+    diagnostics.responseBodySize = Buffer.byteLength(html, 'utf8');
+
+    const extracted = extractArticleContent(html);
+    diagnostics.extractedContentLength = extracted.content.length;
+    if (!hasSufficientContent(extracted.content)) {
+      return {
+        failure: {
+          ...diagnostics,
+          reason: 'Article response did not contain at least 10 characters of readable content.'
+        }
+      };
+    }
+
+    return extracted;
+  } catch (error) {
+    const responseBody = error.response?.data;
+    const responseText = typeof responseBody === 'string' ? responseBody : '';
+    return {
+      failure: {
+        ...diagnostics,
+        httpStatus: error.response?.status || null,
+        responseBodySize: Buffer.byteLength(responseText, 'utf8'),
+        reason: error.message || 'Article fetch failed.'
+      }
+    };
+  }
+}
+
+function extractArticleContent(html) {
+  const $ = cheerio.load(html);
+  const jsonLdContent = extractJsonLdArticleBody($);
+  if (hasSufficientContent(jsonLdContent)) {
+    return { content: jsonLdContent, method: 'json-ld.articleBody' };
+  }
+
+  const cnbcSelector = [
+    '.ArticleBody-articleBody',
+    '.ArticleBodyWrapper',
+    '[data-testid="article-body"]',
+    '[data-module="ArticleBody"]'
+  ].find(selector => hasSufficientContent(cleanText($(selector).text())));
+  if (cnbcSelector) {
+    return {
+      content: cleanText($(cnbcSelector).text()),
+      method: `cnbc-selector:${cnbcSelector}`
+    };
+  }
+
+  const metadataDescription = cleanText(
+    $('meta[name="description"]').attr('content') ||
+    $('meta[property="og:description"]').attr('content') ||
+    ''
+  );
+  return { content: metadataDescription, method: 'metadata-description' };
+}
+
+function extractJsonLdArticleBody($) {
+  let articleBody = '';
+  $('script[type="application/ld+json"]').each((_, script) => {
+    if (articleBody) return;
+    try {
+      const json = JSON.parse($(script).text());
+      articleBody = findArticleBody(json);
+    } catch {
+      // Ignore malformed JSON-LD and continue to CNBC's HTML selectors.
+    }
+  });
+  return cleanText(articleBody);
+}
+
+function findArticleBody(value) {
+  if (!value || typeof value !== 'object') return '';
+  if (typeof value.articleBody === 'string') return value.articleBody;
+  if (Array.isArray(value)) {
+    for (const entry of value) {
+      const articleBody = findArticleBody(entry);
+      if (articleBody) return articleBody;
+    }
+    return '';
+  }
+  for (const nestedValue of Object.values(value)) {
+    const articleBody = findArticleBody(nestedValue);
+    if (articleBody) return articleBody;
+  }
+  return '';
+}
+
+function hasSufficientContent(content) {
+  return cleanText(content).length >= MINIMUM_CONTENT_LENGTH;
+}
+
+function cleanText(value) {
+  return String(value || '')
+    .replace(/<[^>]*>/g, ' ')
+    .replace(/\s+/g, ' ')
+    .trim();
 }
 
 function extractMediaDescription(item) {
